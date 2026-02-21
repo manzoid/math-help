@@ -117,7 +117,7 @@ export default function AdditionLockstep() {
             onChange={(e) => setAddend(Number(e.target.value))}
             style={{
               ...s.bigSlider,
-              accentColor: ADDEND_COLOR,
+              '--thumb-color': ADDEND_COLOR,
             }}
           />
           <span style={{ ...s.bigSliderEnd, color: ADDEND_COLOR }}>{maxAddend}</span>
