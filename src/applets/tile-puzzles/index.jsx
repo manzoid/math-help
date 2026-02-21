@@ -77,7 +77,7 @@ function makeGrid(w, h) {
 export default function TilePuzzles() {
   const svgRef = useRef(null)
   const [levelIndex, setLevelIndex] = useState(0)
-  const [completedLevels, setCompletedLevels] = useState(new Set())
+  const levelCache = useRef({}) // levelIndex -> { pieces, grid, completed }
 
   const level = LEVELS[levelIndex]
 
@@ -151,7 +151,6 @@ export default function TilePuzzles() {
         )
         if (checkCompletion(newGrid, newPieces)) {
           setCompleted(true)
-          setCompletedLevels(prev => new Set([...prev, levelIndex]))
         }
         return newGrid
       })
@@ -177,16 +176,31 @@ export default function TilePuzzles() {
 
   /* ---- level navigation ---- */
   function goToLevel(idx) {
+    // save current level state
+    levelCache.current[levelIndex] = {
+      pieces: piecesRef.current,
+      grid: gridRef.current,
+      completed,
+    }
+
     const lv = LEVELS[idx]
+    const cached = levelCache.current[idx]
     setLevelIndex(idx)
-    setPieces(initPieces(lv))
-    setGrid(makeGrid(lv.gridWidth, lv.gridHeight))
+    if (cached) {
+      setPieces(cached.pieces)
+      setGrid(cached.grid)
+      setCompleted(cached.completed)
+    } else {
+      setPieces(initPieces(lv))
+      setGrid(makeGrid(lv.gridWidth, lv.gridHeight))
+      setCompleted(false)
+    }
     setSelectedId(null)
     setDrag(null)
-    setCompleted(false)
   }
 
   function resetLevel() {
+    delete levelCache.current[levelIndex]
     setPieces(initPieces(level))
     setGrid(makeGrid(gridW, gridH))
     setSelectedId(null)
@@ -214,7 +228,6 @@ export default function TilePuzzles() {
     setSelectedId(null)
     setDrag(null)
     setCompleted(true)
-    setCompletedLevels(prev => new Set([...prev, levelIndex]))
   }
 
   /* ---- pointer handlers ---- */
@@ -619,7 +632,6 @@ export default function TilePuzzles() {
 
         <span style={styles.levelLabel}>
           Level {levelIndex + 1} of {LEVELS.length}
-          {completedLevels.has(levelIndex) ? ' ✓' : ''}
         </span>
 
         <button
