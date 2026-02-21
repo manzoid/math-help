@@ -775,6 +775,10 @@ const styles = {
     alignItems: 'center',
     gap: '0.75rem',
     marginBottom: '0.5rem',
+    maxWidth: 600,
+    margin: '0 auto 0.5rem',
+    paddingRight: `${(SUM_GUTTER / STABLE_SVG_W) * 100}%`,
+    boxSizing: 'border-box',
   },
   levelLabel: {
     fontSize: '0.9rem',
