@@ -18,6 +18,13 @@ const applets = [
     tags: ['addition', 'patterns', 'ages 4-6'],
     component: lazy(() => import('./addition-patterns/index.jsx')),
   },
+  {
+    slug: 'addition-lockstep',
+    title: 'Lockstep Addition',
+    subtitle: 'Slide an addend and watch the sum move with it',
+    tags: ['addition', 'patterns', 'ages 4-6'],
+    component: lazy(() => import('./addition-lockstep/index.jsx')),
+  },
 ]
 
 export default applets
