@@ -119,7 +119,7 @@ export default function AdditionBalance() {
     for (const [label, tp] of Object.entries(trayPos)) {
       const hw = TRAY_W / 2 + 15
       if (sx > tp.x - hw && sx < tp.x + hw &&
-          sy > tp.y - TRAY_WALL_H - 25 && sy < tp.y + 15)
+          sy > tp.y - TRAY_WALL_H - 100 && sy < tp.y + 15)
         return label
     }
     return null
