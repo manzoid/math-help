@@ -32,6 +32,13 @@ const applets = [
     tags: ['addition', 'patterns', 'ages 4-6'],
     component: lazy(() => import('./addition-dial/index.jsx')),
   },
+  {
+    slug: 'addition-balance',
+    title: 'Balance Scale',
+    subtitle: 'Drag weights onto trays to balance an addition equation',
+    tags: ['addition', 'equality', 'ages 4-6'],
+    component: lazy(() => import('./addition-balance/index.jsx')),
+  },
 ]
 
 export default applets
