@@ -488,48 +488,19 @@ const LEVELS = [
 
   // --- TIER 6: Larger pentomino grids (area 25-30) ---
 
-  // Level 16: 5w×5h — bar5×3 + P5rot3 + P5rot1
-  // AAAAA
-  // BBBBB
-  // CCCCC
-  // DDEEE
-  // DDDEE
+  // Level 16: 6w×5h — six vertical bar5
+  // ABCDEF
+  // ABCDEF
+  // ABCDEF
+  // ABCDEF
+  // ABCDEF
   {
     id: 16,
-    label: '5×5 Pentominoes',
-    gridWidth: 5,
-    gridHeight: 5,
-    pieceSize: 5,
-    difficulty: 6,
-    pieces: [
-      { shape: 'bar5' },
-      { shape: 'bar5' },
-      { shape: 'bar5' },
-      { shape: 'P5' },
-      { shape: 'P5' },
-    ],
-    canonicalSolutions: [
-      { pieceIndex: 0, row: 0, col: 0, rotation: 0 },
-      { pieceIndex: 1, row: 1, col: 0, rotation: 0 },
-      { pieceIndex: 2, row: 2, col: 0, rotation: 0 },
-      { pieceIndex: 3, row: 3, col: 0, rotation: 3 },
-      { pieceIndex: 4, row: 3, col: 2, rotation: 1 },
-    ],
-  },
-
-  // Level 17: 6w×5h — six vertical bar5
-  // ABCDEF
-  // ABCDEF
-  // ABCDEF
-  // ABCDEF
-  // ABCDEF
-  {
-    id: 17,
-    label: '6×5 Challenge',
+    label: '6×5 Bars',
     gridWidth: 6,
     gridHeight: 5,
     pieceSize: 5,
-    difficulty: 7,
+    difficulty: 6,
     pieces: [
       { shape: 'bar5' },
       { shape: 'bar5' },
@@ -545,6 +516,35 @@ const LEVELS = [
       { pieceIndex: 3, row: 0, col: 3, rotation: 1 },
       { pieceIndex: 4, row: 0, col: 4, rotation: 1 },
       { pieceIndex: 5, row: 0, col: 5, rotation: 1 },
+    ],
+  },
+
+  // Level 17: 5w×5h — bar5×3 + P5rot3 + P5rot1
+  // AAAAA
+  // BBBBB
+  // CCCCC
+  // DDEEE
+  // DDDEE
+  {
+    id: 17,
+    label: '5×5 Pentominoes',
+    gridWidth: 5,
+    gridHeight: 5,
+    pieceSize: 5,
+    difficulty: 7,
+    pieces: [
+      { shape: 'bar5' },
+      { shape: 'bar5' },
+      { shape: 'bar5' },
+      { shape: 'P5' },
+      { shape: 'P5' },
+    ],
+    canonicalSolutions: [
+      { pieceIndex: 0, row: 0, col: 0, rotation: 0 },
+      { pieceIndex: 1, row: 1, col: 0, rotation: 0 },
+      { pieceIndex: 2, row: 2, col: 0, rotation: 0 },
+      { pieceIndex: 3, row: 3, col: 0, rotation: 3 },
+      { pieceIndex: 4, row: 3, col: 2, rotation: 1 },
     ],
   },
 
