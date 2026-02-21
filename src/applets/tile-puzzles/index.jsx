@@ -408,6 +408,45 @@ export default function TilePuzzles() {
     return rects
   }
 
+  function renderPieceOutlines() {
+    const seen = new Set()
+    const outlines = []
+    for (const piece of pieces) {
+      if (!piece.placed || seen.has(piece.id)) continue
+      seen.add(piece.id)
+      const cells = getCells(piece)
+      const cellSet = new Set(cells.map(([r, c]) => `${r},${c}`))
+      // collect outer edges as line segments
+      const segs = []
+      for (const [r, c] of cells) {
+        const x0 = PAD + (piece.gridCol + c) * CELL
+        const y0 = PAD + (piece.gridRow + r) * CELL
+        // top edge
+        if (!cellSet.has(`${r - 1},${c}`)) segs.push([x0, y0, x0 + CELL, y0])
+        // bottom edge
+        if (!cellSet.has(`${r + 1},${c}`)) segs.push([x0, y0 + CELL, x0 + CELL, y0 + CELL])
+        // left edge
+        if (!cellSet.has(`${r},${c - 1}`)) segs.push([x0, y0, x0, y0 + CELL])
+        // right edge
+        if (!cellSet.has(`${r},${c + 1}`)) segs.push([x0 + CELL, y0, x0 + CELL, y0 + CELL])
+      }
+      // draw as a single path
+      const d = segs.map(([x1, y1, x2, y2]) => `M${x1},${y1}L${x2},${y2}`).join('')
+      outlines.push(
+        <path
+          key={`outline-${piece.id}`}
+          d={d}
+          fill="none"
+          stroke="rgba(0,0,0,0.35)"
+          strokeWidth={3}
+          strokeLinecap="round"
+          style={{ pointerEvents: 'none' }}
+        />
+      )
+    }
+    return outlines
+  }
+
   function renderGridNumbers() {
     const seen = new Set()
     const labels = []
@@ -623,16 +662,6 @@ export default function TilePuzzles() {
             {placedSum}
           </text>
         </g>
-        {/* target label */}
-        <text
-          x={sx} y={sy + 28}
-          textAnchor="middle" dominantBaseline="central"
-          fontSize={11} fontWeight={600}
-          fill={isFull ? '#34c759' : '#ccc'}
-          fontFamily="system-ui, sans-serif"
-        >
-          / {totalArea}
-        </text>
         {/* celebration ring */}
         {isFull && (
           <>
@@ -687,6 +716,7 @@ export default function TilePuzzles() {
 
         {/* grid cells */}
         {renderGrid()}
+        {renderPieceOutlines()}
         {renderGridNumbers()}
 
         {/* running sum */}
