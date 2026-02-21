@@ -61,9 +61,6 @@ function Dial({ value, onChange, color }) {
     return () => el.removeEventListener('wheel', handler)
   }, [value, onChange])
 
-  const prev = value > 0 ? value - 1 : null
-  const next = value < MAX ? value + 1 : null
-
   return (
     <div style={s.dialWrapper}>
       {/* up chevron */}
@@ -83,12 +80,7 @@ function Dial({ value, onChange, color }) {
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
       >
-        {/* ghost above */}
-        <div style={s.ghost}>{prev != null ? prev : ''}</div>
-        {/* current value */}
         <div style={{ ...s.dialValue, color }}>{value}</div>
-        {/* ghost below */}
-        <div style={s.ghost}>{next != null ? next : ''}</div>
       </div>
 
       {/* down chevron */}
@@ -236,7 +228,7 @@ const s = {
   },
   dialWindow: {
     width: 72,
-    height: 120,
+    height: 72,
     borderRadius: 14,
     border: '3px solid',
     background: '#fff',
@@ -249,17 +241,6 @@ const s = {
     boxShadow: 'var(--shadow-md)',
     overflow: 'hidden',
     position: 'relative',
-  },
-  ghost: {
-    fontSize: '1.3rem',
-    fontWeight: 600,
-    fontFamily: "'SF Mono', 'Fira Code', 'Consolas', monospace",
-    color: '#ccc',
-    height: 30,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    userSelect: 'none',
   },
   dialValue: {
     fontSize: '2.8rem',
