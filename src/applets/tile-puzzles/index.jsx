@@ -107,6 +107,8 @@ export default function TilePuzzles() {
   const gridW = level.gridWidth
   const gridH = level.gridHeight
   const svgW = STABLE_SVG_W
+  // center the grid + sum gutter horizontally
+  const gridX = (svgW - (gridW * CELL + SUM_GUTTER)) / 2
   const trayY = PAD + gridH * CELL + TRAY_GAP
 
   /* ---- SVG coord helper ---- */
@@ -130,7 +132,7 @@ export default function TilePuzzles() {
     const maxR = Math.max(...cells.map(([r]) => r))
     const maxC = Math.max(...cells.map(([, c]) => c))
     const row = Math.round((svgY - PAD) / CELL - (maxR + 1) / 2)
-    const col = Math.round((svgX - PAD) / CELL - (maxC + 1) / 2)
+    const col = Math.round((svgX - gridX) / CELL - (maxC + 1) / 2)
     return { row, col }
   }
 
@@ -376,7 +378,7 @@ export default function TilePuzzles() {
       for (let c = 0; c < gridW; c++) {
         const pid = grid[r][c]
         const piece = pid !== null ? pieces.find(p => p.id === pid) : null
-        const cx = PAD + c * CELL
+        const cx = gridX + c * CELL
         const cy = PAD + r * CELL
         if (piece) {
           const m = 1   // margin between cells
@@ -438,7 +440,7 @@ export default function TilePuzzles() {
       // collect outer edges as line segments
       const segs = []
       for (const [r, c] of cells) {
-        const x0 = PAD + (piece.gridCol + c) * CELL
+        const x0 = gridX + (piece.gridCol + c) * CELL
         const y0 = PAD + (piece.gridRow + r) * CELL
         // top edge
         if (!cellSet.has(`${r - 1},${c}`)) segs.push([x0, y0, x0 + CELL, y0])
@@ -474,7 +476,7 @@ export default function TilePuzzles() {
       seen.add(piece.id)
       const cells = getCells(piece)
       const [lr, lc] = labelCell(cells)
-      const gx = PAD + (piece.gridCol + lc) * CELL + CELL / 2
+      const gx = gridX + (piece.gridCol + lc) * CELL + CELL / 2
       const gy = PAD + (piece.gridRow + lr) * CELL + CELL / 2
       labels.push(
         <text
@@ -563,7 +565,7 @@ export default function TilePuzzles() {
     return cells.map(([r, c], i) => (
       <rect
         key={`ghost-${i}`}
-        x={PAD + (drag.snapCol + c) * CELL + 2}
+        x={gridX + (drag.snapCol + c) * CELL + 2}
         y={PAD + (drag.snapRow + r) * CELL + 2}
         width={CELL - 4}
         height={CELL - 4}
@@ -665,7 +667,7 @@ export default function TilePuzzles() {
       >
         {/* grid background */}
         <rect
-          x={PAD - 2} y={PAD - 2}
+          x={gridX - 2} y={PAD - 2}
           width={gridW * CELL + 4} height={gridH * CELL + 4}
           rx={8} fill="none" stroke="#ddd" strokeWidth={2}
         />
@@ -677,7 +679,7 @@ export default function TilePuzzles() {
 
         {/* big running sum to the right of the grid */}
         {(() => {
-          const sumX = PAD + gridW * CELL + SUM_GUTTER / 2
+          const sumX = gridX + gridW * CELL + SUM_GUTTER / 2
           const sumY = PAD + (gridH * CELL) / 2
           return (
             <g style={{ pointerEvents: 'none' }}>
