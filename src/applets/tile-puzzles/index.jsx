@@ -88,10 +88,24 @@ export default function TilePuzzles() {
 
   const level = LEVELS[levelIndex]
 
-  const [pieces, setPieces] = useState(() => initPieces(level))
-  const [grid, setGrid] = useState(() => makeGrid(level.gridWidth, level.gridHeight))
+  const [pieces, _setPieces] = useState(() => initPieces(level))
+  const piecesRef = useRef(pieces)
+  const setPieces = (v) => {
+    const next = typeof v === 'function' ? v(piecesRef.current) : v
+    piecesRef.current = next
+    _setPieces(next)
+  }
+  const [grid, _setGrid] = useState(() => makeGrid(level.gridWidth, level.gridHeight))
+  const gridRef = useRef(grid)
+  const setGrid = (v) => {
+    const next = typeof v === 'function' ? v(gridRef.current) : v
+    gridRef.current = next
+    _setGrid(next)
+  }
   const [selectedId, setSelectedId] = useState(null)
-  const [drag, setDrag] = useState(null)
+  const [drag, _setDrag] = useState(null)
+  const dragRef = useRef(null)
+  const setDrag = (v) => { dragRef.current = v; _setDrag(v) }
   const [hintLevel, setHintLevel] = useState(0)
   const [completed, setCompleted] = useState(false)
   const dragStart = useRef(null)
@@ -128,39 +142,44 @@ export default function TilePuzzles() {
 
   /* ---- place a piece on the grid ---- */
   function placePiece(pieceId, row, col) {
-    const piece = pieces.find(p => p.id === pieceId)
-    if (!piece) return
-    const cells = getCells(piece)
-    if (!canPlace(grid, cells, row, col, gridW, gridH, null)) return
+    setPieces(prevPieces => {
+      const piece = prevPieces.find(p => p.id === pieceId)
+      if (!piece) return prevPieces
+      const cells = getCells(piece)
 
-    const newGrid = grid.map(r => [...r])
-    for (const [r, c] of cells) {
-      newGrid[row + r][col + c] = pieceId
-    }
-    setGrid(newGrid)
+      setGrid(prevGrid => {
+        if (!canPlace(prevGrid, cells, row, col, gridW, gridH, null)) return prevGrid
+        const newGrid = prevGrid.map(r => [...r])
+        for (const [r, c] of cells) {
+          newGrid[row + r][col + c] = pieceId
+        }
+        const newPieces = prevPieces.map(p =>
+          p.id === pieceId ? { ...p, placed: true, gridRow: row, gridCol: col } : p
+        )
+        if (checkCompletion(newGrid, newPieces)) {
+          setCompleted(true)
+          setCompletedLevels(prev => new Set([...prev, levelIndex]))
+        }
+        return newGrid
+      })
 
-    const newPieces = pieces.map(p =>
-      p.id === pieceId ? { ...p, placed: true, gridRow: row, gridCol: col } : p
-    )
-    setPieces(newPieces)
-
-    if (checkCompletion(newGrid, newPieces)) {
-      setCompleted(true)
-      setCompletedLevels(prev => new Set([...prev, levelIndex]))
-    }
+      return prevPieces.map(p =>
+        p.id === pieceId ? { ...p, placed: true, gridRow: row, gridCol: col } : p
+      )
+    })
   }
 
   /* ---- remove a piece from the grid ---- */
   function removePiece(pieceId) {
-    const piece = pieces.find(p => p.id === pieceId)
-    if (!piece || !piece.placed) return
-
-    const newGrid = grid.map(r => r.map(c => c === pieceId ? null : c))
-    setGrid(newGrid)
-    setPieces(pieces.map(p =>
-      p.id === pieceId ? { ...p, placed: false } : p
-    ))
-    setCompleted(false)
+    setPieces(prevPieces => {
+      const piece = prevPieces.find(p => p.id === pieceId)
+      if (!piece || !piece.placed) return prevPieces
+      setGrid(prevGrid => prevGrid.map(r => r.map(c => c === pieceId ? null : c)))
+      setCompleted(false)
+      return prevPieces.map(p =>
+        p.id === pieceId ? { ...p, placed: false } : p
+      )
+    })
   }
 
   /* ---- level navigation ---- */
@@ -239,6 +258,7 @@ export default function TilePuzzles() {
 
   function onGridPieceDown(e, pieceId) {
     e.stopPropagation()
+    svgRef.current?.setPointerCapture(e.pointerId)
     dragStart.current = { x: 0, y: 0, pieceId, moved: false, isGrid: true }
   }
 
@@ -256,11 +276,11 @@ export default function TilePuzzles() {
 
     if (!dragStart.current.moved) return
 
-    const piece = pieces.find(pp => pp.id === dragStart.current.pieceId)
+    const piece = piecesRef.current.find(pp => pp.id === dragStart.current.pieceId)
     if (!piece) return
     const cells = getCells(piece)
     const snap = snapToGrid(p.x, p.y, cells)
-    const valid = canPlace(grid, cells, snap.row, snap.col, gridW, gridH, null)
+    const valid = canPlace(gridRef.current, cells, snap.row, snap.col, gridW, gridH, null)
 
     setDrag({
       pieceId: dragStart.current.pieceId,
@@ -299,8 +319,9 @@ export default function TilePuzzles() {
     }
 
     // Drop after drag
-    if (drag && drag.snapRow !== null && drag.snapCol !== null) {
-      placePiece(ds.pieceId, drag.snapRow, drag.snapCol)
+    const d = dragRef.current
+    if (d && d.snapRow !== null && d.snapCol !== null) {
+      placePiece(ds.pieceId, d.snapRow, d.snapCol)
     }
     setDrag(null)
   }
