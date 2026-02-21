@@ -178,7 +178,7 @@ function Thumbwheel({ value, onChange, color }) {
     const handler = (e) => {
       e.preventDefault()
       scrollAccum.current += e.deltaY
-      if (Math.abs(scrollAccum.current) >= 80) {
+      if (Math.abs(scrollAccum.current) >= 160) {
         const dir = scrollAccum.current < 0 ? 1 : -1
         const newVal = clampVal(value + dir)
         onChange(newVal)
