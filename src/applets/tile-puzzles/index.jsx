@@ -342,13 +342,31 @@ export default function TilePuzzles() {
 
   function onGridPieceDown(e, pieceId) {
     e.stopPropagation()
-    svgRef.current?.setPointerCapture(e.pointerId)
-    dragStart.current = { x: 0, y: 0, pieceId, moved: false, isGrid: true }
+    const svg = svgRef.current
+    if (!svg) return
+    svg.setPointerCapture(e.pointerId)
+
+    const p = toSVG(e.clientX, e.clientY)
+    const piece = piecesRef.current.find(pp => pp.id === pieceId)
+
+    // remove from grid, then hold it like a tray piece
+    removePiece(pieceId)
+
+    resetGesture()
+    dragStart.current = { x: p.x, y: p.y, pieceId, moved: false }
+
+    setDrag({
+      pieceId,
+      svgX: p.x,
+      svgY: p.y - DRAG_LIFT,
+      snapRow: null,
+      snapCol: null,
+      originalRotation: piece ? piece.rotation : 0,
+    })
   }
 
   function onPointerMove(e) {
     if (!dragStart.current) return
-    if (dragStart.current.isGrid) return // grid taps only
 
     const p = toSVG(e.clientX, e.clientY)
 
@@ -393,14 +411,7 @@ export default function TilePuzzles() {
     const ds = dragStart.current
     dragStart.current = null
 
-    if (ds.isGrid) {
-      // Tap on placed piece => remove it
-      removePiece(ds.pieceId)
-      setDrag(null)
-      return
-    }
-
-    // Tray piece release: place if valid snap, else rubber-band back
+    // Release: place if valid snap, else rubber-band back to tray
     const d = dragRef.current
     if (d && d.snapRow !== null && d.snapCol !== null) {
       placePiece(ds.pieceId, d.snapRow, d.snapCol)
