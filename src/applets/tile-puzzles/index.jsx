@@ -10,6 +10,10 @@ const TAP_THRESHOLD = 5
 const DRAG_LIFT = 45 // lift drag piece above finger
 const TRAY_ROW_H = 55 // height of one tray row
 
+/* stable SVG width across all levels so layout never shifts */
+const MAX_GRID_W = Math.max(...LEVELS.map(l => l.gridWidth))
+const STABLE_SVG_W = Math.max(MAX_GRID_W * CELL + PAD * 2, 280)
+
 /* ---- Fisher-Yates shuffle ---- */
 function shuffle(arr) {
   const a = [...arr]
@@ -101,7 +105,7 @@ export default function TilePuzzles() {
   /* ---- derived layout ---- */
   const gridW = level.gridWidth
   const gridH = level.gridHeight
-  const svgW = Math.max(gridW * CELL + PAD * 2, 280)
+  const svgW = STABLE_SVG_W
   const trayY = PAD + gridH * CELL + TRAY_GAP
 
   /* ---- SVG coord helper ---- */
@@ -637,9 +641,6 @@ export default function TilePuzzles() {
   /*  JSX                                                            */
   /* ============================================================== */
 
-  const pieceCount = level.pieces.length
-  const pieceSz = level.pieceSize
-
   return (
     <div style={styles.root}>
       {/* level navigation + actions */}
@@ -679,11 +680,6 @@ export default function TilePuzzles() {
         <button onClick={showSolution} style={styles.btnSecondary}>
           Show Solution
         </button>
-      </div>
-
-      {/* info bar */}
-      <div style={styles.infoBar}>
-        {pieceCount} piece{pieceCount !== 1 ? 's' : ''} — each piece has {pieceSz} square{pieceSz !== 1 ? 's' : ''}
       </div>
 
       {/* SVG canvas */}
@@ -774,13 +770,6 @@ const styles = {
     margin: '0 auto 0.5rem',
     touchAction: 'none',
     cursor: 'default',
-  },
-  infoBar: {
-    textAlign: 'center',
-    fontSize: '0.9rem',
-    color: 'var(--color-muted)',
-    marginBottom: '0.5rem',
-    fontWeight: 500,
   },
   controls: {
     display: 'flex',
