@@ -390,7 +390,7 @@ export default function TilePuzzles() {
         const cx = PAD + c * CELL
         const cy = PAD + r * CELL
         if (piece) {
-          const inset = 1.5
+          const inset = 3
           rects.push(
             <g key={`${r}-${c}`}
               style={{ cursor: 'pointer' }}
@@ -400,14 +400,14 @@ export default function TilePuzzles() {
               <rect
                 x={cx + inset} y={cy + inset}
                 width={CELL - inset * 2} height={CELL - inset * 2}
-                rx={4}
+                rx={5}
                 fill={piece.color}
               />
-              {/* top-left highlight for bevel */}
+              {/* bevel highlight overlay */}
               <rect
                 x={cx + inset} y={cy + inset}
                 width={CELL - inset * 2} height={CELL - inset * 2}
-                rx={4}
+                rx={5}
                 fill="url(#cellBevel)"
               />
             </g>
@@ -776,9 +776,10 @@ export default function TilePuzzles() {
         <defs>
           {/* bevel gradient for gem-like cells */}
           <linearGradient id="cellBevel" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#fff" stopOpacity="0.35" />
-            <stop offset="50%" stopColor="#fff" stopOpacity="0.05" />
-            <stop offset="100%" stopColor="#000" stopOpacity="0.15" />
+            <stop offset="0%" stopColor="#fff" stopOpacity="0.45" />
+            <stop offset="45%" stopColor="#fff" stopOpacity="0.0" />
+            <stop offset="55%" stopColor="#000" stopOpacity="0.0" />
+            <stop offset="100%" stopColor="#000" stopOpacity="0.25" />
           </linearGradient>
           <style>{`
             @keyframes sumCelebrate {
