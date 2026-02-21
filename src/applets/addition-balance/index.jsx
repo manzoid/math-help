@@ -58,7 +58,7 @@ export default function AdditionBalance() {
   /* ---- spring-animated beam angle ---- */
   useEffect(() => {
     const diff   = (counts.a + counts.b) - counts.sum
-    const target = Math.max(-MAX_ANGLE, Math.min(MAX_ANGLE, diff * 0.055))
+    const target = Math.max(-MAX_ANGLE, Math.min(MAX_ANGLE, -diff * 0.055))
     let active   = true
 
     function tick() {
