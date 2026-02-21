@@ -700,17 +700,6 @@ export default function TilePuzzles() {
           const sumY = PAD + (gridH * CELL) / 2
           return (
             <g style={{ pointerEvents: 'none' }}>
-              {/* subtle glow behind the number */}
-              <text
-                x={sumX} y={sumY}
-                textAnchor="middle" dominantBaseline="central"
-                fontSize={46} fontWeight={900}
-                fill={completed ? '#00c853' : 'transparent'}
-                fontFamily="system-ui, sans-serif"
-                style={{ filter: 'blur(8px)' }}
-              >
-                {placedSum}
-              </text>
               {/* main number with gradient fill */}
               <text
                 x={sumX} y={sumY}
