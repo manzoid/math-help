@@ -130,16 +130,20 @@ export default function TilePuzzles() {
   // Tracks the cumulative turning angle between consecutive displacement
   // vectors.  Linear drags produce ~0 turn; circular sweeps accumulate
   // quickly.  ~180° of accumulated turn triggers a rotation.
-  const gestureRef = useRef({ points: [], totalTurn: 0 })
+  const gestureRef = useRef({ points: [], totalTurn: 0, cooldownUntil: 0 })
   const TURN_THRESHOLD = Math.PI // 180° of turning triggers rotation
+  const GESTURE_COOLDOWN = 400   // ms before another rotation can fire
 
   function resetGesture() {
-    gestureRef.current = { points: [], totalTurn: 0 }
+    gestureRef.current = { points: [], totalTurn: 0, cooldownUntil: 0 }
   }
 
   /** Returns 1 (CW), -1 (CCW), or 0 (no rotation yet) */
   function updateGesture(x, y) {
     const g = gestureRef.current
+    const now = performance.now()
+    if (now < g.cooldownUntil) { g.points = []; return 0 }
+
     g.points.push({ x, y })
     if (g.points.length > 30) g.points.splice(0, g.points.length - 25)
     if (g.points.length < 3) return 0
@@ -162,8 +166,14 @@ export default function TilePuzzles() {
     const dot = v1x * v2x + v1y * v2y
     g.totalTurn += Math.atan2(cross, dot)
 
-    if (g.totalTurn > TURN_THRESHOLD) { resetGesture(); return 1 }
-    if (g.totalTurn < -TURN_THRESHOLD) { resetGesture(); return -1 }
+    if (g.totalTurn > TURN_THRESHOLD) {
+      g.points = []; g.totalTurn = 0; g.cooldownUntil = now + GESTURE_COOLDOWN
+      return 1
+    }
+    if (g.totalTurn < -TURN_THRESHOLD) {
+      g.points = []; g.totalTurn = 0; g.cooldownUntil = now + GESTURE_COOLDOWN
+      return -1
+    }
     return 0
   }
 
