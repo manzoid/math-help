@@ -120,6 +120,7 @@ export default function TilePuzzles() {
     _setGrid(next)
   }
   const [selectedId, setSelectedId] = useState(null)
+  const prePickRotation = useRef(null) // rotation before pick-up, to restore on cancel
   const [drag, _setDrag] = useState(null)
   const dragRef = useRef(null)
   const setDrag = (v) => { dragRef.current = v; _setDrag(v) }
@@ -269,6 +270,17 @@ export default function TilePuzzles() {
     setCompleted(true)
   }
 
+  /* ---- cancel selection: put piece back with original rotation ---- */
+  function cancelSelection() {
+    if (selectedId !== null && prePickRotation.current !== null) {
+      setPieces(prev => prev.map(p =>
+        p.id === selectedId ? { ...p, rotation: prePickRotation.current } : p
+      ))
+    }
+    setSelectedId(null)
+    prePickRotation.current = null
+  }
+
   /* ---- pointer handlers ---- */
   function onTrayPieceDown(e, pieceId) {
     e.stopPropagation()
@@ -334,11 +346,14 @@ export default function TilePuzzles() {
     if (!ds.moved) {
       // Tap on tray piece
       if (selectedId === ds.pieceId) {
-        // Rotate
+        // Already held → rotate
         setPieces(pieces.map(p =>
           p.id === ds.pieceId ? { ...p, rotation: (p.rotation + 1) % 4 } : p
         ))
       } else {
+        // Pick up: store current rotation so we can restore on cancel
+        const piece = piecesRef.current.find(p => p.id === ds.pieceId)
+        prePickRotation.current = piece ? piece.rotation : 0
         setSelectedId(ds.pieceId)
       }
       setDrag(null)
@@ -349,6 +364,7 @@ export default function TilePuzzles() {
     const d = dragRef.current
     if (d && d.snapRow !== null && d.snapCol !== null) {
       placePiece(ds.pieceId, d.snapRow, d.snapCol)
+      setSelectedId(null)
     }
     setDrag(null)
   }
@@ -360,23 +376,20 @@ export default function TilePuzzles() {
       .sort((a, b) => a.trayOrder - b.trayOrder)
   }, [pieces])
 
-  /* ---- compute tray positions with wrapping ---- */
+  /* ---- compute tray positions with wrapping (using base shape for stable sizing) ---- */
   const trayLayout = useMemo(() => {
     const gridCenterX = gridX + (gridW * CELL) / 2
-    // max row width that fits when centered under the grid
     const maxW = 2 * Math.min(gridCenterX, svgW - gridCenterX) - PAD
     const GAP = 10
     const TRAY_PAD_Y = 8
 
-    // first pass: assign rows
+    // first pass: assign rows using base shape (rotation 0) for stable sizing
     const rowItems = [[]]
     let x = 0
     for (const piece of trayPieces) {
-      const cells = getCells(piece)
-      const maxC = Math.max(...cells.map(([, c]) => c)) + 1
-      const maxR = Math.max(...cells.map(([r]) => r)) + 1
-      const pw = maxC * CELL * TRAY_SCALE
-      const ph = maxR * CELL * TRAY_SCALE
+      const base = piece.baseShape
+      const pw = (Math.max(...base.map(([, c]) => c)) + 1) * CELL * TRAY_SCALE
+      const ph = (Math.max(...base.map(([r]) => r)) + 1) * CELL * TRAY_SCALE
       if (x > 0 && x + pw > maxW) {
         rowItems.push([])
         x = 0
@@ -566,42 +579,48 @@ export default function TilePuzzles() {
 
   function renderTrayPieces() {
     return trayLayout.positions.map(({ piece, x, y }) => {
-      const cells = getCells(piece)
       const isSelected = selectedId === piece.id
       const isDragging = drag?.pieceId === piece.id && dragStart.current?.moved
+      // tray always shows base shape (rotation 0)
+      const baseCells = piece.baseShape
+      const S = CELL * TRAY_SCALE
+
+      if (isSelected && !isDragging) {
+        // show ghost outline in tray slot, piece is "lifted" (rendered separately)
+        return (
+          <g key={piece.id} onPointerDown={(e) => onTrayPieceDown(e, piece.id)}>
+            <rect
+              x={x - 2} y={y - 2}
+              width={(Math.max(...baseCells.map(([,c]) => c)) + 1) * S + 4}
+              height={(Math.max(...baseCells.map(([r]) => r)) + 1) * S + 4}
+              rx={4}
+              fill="rgba(0,0,0,0.04)"
+              stroke={piece.color}
+              strokeWidth={1.5}
+              strokeDasharray="4 3"
+              opacity={0.5}
+            />
+          </g>
+        )
+      }
+
       return (
         <g key={piece.id}
-          onPointerDown={(e) => !isDragging && onTrayPieceDown(e, piece.id)}
+          onPointerDown={(e) => onTrayPieceDown(e, piece.id)}
           style={{ cursor: 'grab' }}
           opacity={isDragging ? 0.2 : 1}
         >
-          {isSelected && (
-            <rect
-              x={x - 4}
-              y={y - 4}
-              width={(Math.max(...cells.map(([,c]) => c)) + 1) * CELL * TRAY_SCALE + 8}
-              height={(Math.max(...cells.map(([r]) => r)) + 1) * CELL * TRAY_SCALE + 8}
-              rx={6}
-              fill="none"
-              stroke={piece.color}
-              strokeWidth={2.5}
-              strokeDasharray="6 3"
-            />
-          )}
-          {cells.map(([r, c], i) => {
-            const S = CELL * TRAY_SCALE
-            return (
-              <g key={i}>
-                {bevelCell(x + c * S, y + r * S, piece.color, S)}
-              </g>
-            )
-          })}
+          {baseCells.map(([r, c], i) => (
+            <g key={i}>
+              {bevelCell(x + c * S, y + r * S, piece.color, S)}
+            </g>
+          ))}
           {(() => {
-            const [lr, lc] = labelCell(cells)
+            const [lr, lc] = labelCell(baseCells)
             return (
               <text
-                x={x + lc * CELL * TRAY_SCALE + CELL * TRAY_SCALE / 2}
-                y={y + lr * CELL * TRAY_SCALE + CELL * TRAY_SCALE / 2}
+                x={x + lc * S + S / 2}
+                y={y + lr * S + S / 2}
                 textAnchor="middle" dominantBaseline="central"
                 fontSize={12} fontWeight={700}
                 fill="#fff" opacity={0.85}
@@ -615,6 +634,55 @@ export default function TilePuzzles() {
         </g>
       )
     })
+  }
+
+  /* ---- render the "lifted" selected piece above tray ---- */
+  function renderLiftedPiece() {
+    if (selectedId === null) return null
+    const pos = trayLayout.positions.find(p => p.piece.id === selectedId)
+    if (!pos) return null
+    const piece = pos.piece
+    const isDragging = drag?.pieceId === piece.id && dragStart.current?.moved
+    if (isDragging) return null
+
+    const cells = getCells(piece) // current rotation
+    const S = CELL * TRAY_SCALE
+    const baseCells = piece.baseShape
+    const slotW = (Math.max(...baseCells.map(([,c]) => c)) + 1) * S
+    const slotH = (Math.max(...baseCells.map(([r]) => r)) + 1) * S
+    const pieceW = (Math.max(...cells.map(([,c]) => c)) + 1) * S
+    const pieceH = (Math.max(...cells.map(([r]) => r)) + 1) * S
+    // center lifted piece over its tray slot
+    const lx = pos.x + (slotW - pieceW) / 2
+    const ly = pos.y + (slotH - pieceH) / 2 - 8 // slight lift
+
+    return (
+      <g onPointerDown={(e) => onTrayPieceDown(e, piece.id)}
+        style={{ cursor: 'grab', filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.3))' }}
+      >
+        {cells.map(([r, c], i) => (
+          <g key={i}>
+            {bevelCell(lx + c * S, ly + r * S, piece.color, S)}
+          </g>
+        ))}
+        {(() => {
+          const [lr, lc] = labelCell(cells)
+          return (
+            <text
+              x={lx + lc * S + S / 2}
+              y={ly + lr * S + S / 2}
+              textAnchor="middle" dominantBaseline="central"
+              fontSize={12} fontWeight={700}
+              fill="#fff" opacity={0.85}
+              fontFamily="system-ui, sans-serif"
+              style={{ pointerEvents: 'none' }}
+            >
+              {level.pieceSize}
+            </text>
+          )
+        })()}
+      </g>
+    )
   }
 
   function renderDragGhost() {
@@ -716,6 +784,7 @@ export default function TilePuzzles() {
       <svg
         ref={svgRef}
         viewBox={`0 0 ${svgW} ${svgH}`}
+        onPointerDown={(e) => { if (e.target === svgRef.current) cancelSelection() }}
         style={styles.svg}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -724,7 +793,8 @@ export default function TilePuzzles() {
         <rect
           x={gridX - 2} y={PAD - 2}
           width={gridW * CELL + 4} height={gridH * CELL + 4}
-          rx={8} fill="none" stroke="#ddd" strokeWidth={2}
+          rx={8} fill="transparent" stroke="#ddd" strokeWidth={2}
+          onPointerDown={() => cancelSelection()}
         />
 
         {/* grid cells */}
@@ -764,6 +834,9 @@ export default function TilePuzzles() {
 
         {/* tray pieces */}
         {renderTrayPieces()}
+
+        {/* lifted/selected piece above tray */}
+        {renderLiftedPiece()}
 
         {/* drag snap preview */}
         {renderDragGhost()}
