@@ -3,7 +3,7 @@ import Matter from 'matter-js'
 
 const {
   Engine, Render, Runner, Bodies, Body, Composite, Constraint,
-  Mouse, MouseConstraint, Events, Vector,
+  Mouse, MouseConstraint, Events,
 } = Matter
 
 const A_COLOR = '#4a6cf7'
@@ -11,19 +11,19 @@ const B_COLOR = '#ff9500'
 const SUM_COLOR = '#34c759'
 const MAX_WEIGHTS = 12
 
-const CANVAS_W = 620
-const CANVAS_H = 500
+const CANVAS_W = 560
+const CANVAS_H = 460
 
-/* ---- category bit masks for collision filtering ---- */
+const WEIGHT_R = 9
+const TRAY_INNER_W = 80
+const TRAY_WALL_H = 50
+const TRAY_WALL_THICK = 5
+const TRAY_FLOOR_THICK = 6
+
+/* ---- collision categories ---- */
 const CAT_WEIGHT = 0x0002
 const CAT_TRAY   = 0x0004
-const CAT_WALL   = 0x0008
-const CAT_BEAM   = 0x0010
-
-const WEIGHT_R = 10
-const TRAY_WALL_THICK = 4
-const TRAY_INNER_W = 90
-const TRAY_FLOOR_THICK = 6
+const CAT_STATIC = 0x0008
 
 /* ---- helpers ---- */
 
@@ -40,107 +40,73 @@ function countWeightsInTray(engine, trayLabel) {
   ).length
 }
 
-/* Which tray does a point fall into (based on tray floor body positions)? */
-function trayAtPoint(engine, x, y, trayFloors) {
-  for (const [label, floor] of Object.entries(trayFloors)) {
-    const fx = floor.position.x
-    const fy = floor.position.y
-    if (
-      x > fx - TRAY_INNER_W / 2 - 15 &&
-      x < fx + TRAY_INNER_W / 2 + 15 &&
-      y > fy - 120 &&
-      y < fy + 20
-    ) {
-      return label
-    }
-  }
-  return null
-}
-
-/* ---- Build a single tray (floor + 2 walls) as a compound-ish group ---- */
+/**
+ * Build a tray as a single compound body (floor + 2 walls).
+ * Compound bodies in matter-js keep their parts rigidly together.
+ */
 function createTray(x, y, color) {
   const hw = TRAY_INNER_W / 2
 
+  // Parts are positioned absolutely, then combined
   const floor = Bodies.rectangle(x, y, TRAY_INNER_W + TRAY_WALL_THICK * 2, TRAY_FLOOR_THICK, {
-    isStatic: false,
-    render: { fillStyle: color, opacity: 0.3, strokeStyle: color, lineWidth: 1 },
-    collisionFilter: { category: CAT_TRAY, mask: CAT_WEIGHT },
-    label: 'trayFloor',
+    render: { fillStyle: color, opacity: 0.35, strokeStyle: color, lineWidth: 1.5 },
+  })
+  const wallL = Bodies.rectangle(
+    x - hw - TRAY_WALL_THICK / 2, y - TRAY_WALL_H / 2,
+    TRAY_WALL_THICK, TRAY_WALL_H,
+    { render: { fillStyle: color, opacity: 0.2 } },
+  )
+  const wallR = Bodies.rectangle(
+    x + hw + TRAY_WALL_THICK / 2, y - TRAY_WALL_H / 2,
+    TRAY_WALL_THICK, TRAY_WALL_H,
+    { render: { fillStyle: color, opacity: 0.2 } },
+  )
+
+  const compound = Body.create({
+    parts: [floor, wallL, wallR],
+    friction: 0.8,
+    restitution: 0.1,
+    density: 0.001,
+    collisionFilter: { category: CAT_TRAY, mask: CAT_WEIGHT | CAT_STATIC },
+    label: 'tray',
   })
 
-  const wallL = Bodies.rectangle(x - hw - TRAY_WALL_THICK / 2, y - 30, TRAY_WALL_THICK, 60, {
-    isStatic: false,
-    render: { fillStyle: color, opacity: 0.25 },
-    collisionFilter: { category: CAT_WALL, mask: CAT_WEIGHT },
-    label: 'trayWall',
-  })
-
-  const wallR = Bodies.rectangle(x + hw + TRAY_WALL_THICK / 2, y - 30, TRAY_WALL_THICK, 60, {
-    isStatic: false,
-    render: { fillStyle: color, opacity: 0.25 },
-    collisionFilter: { category: CAT_WALL, mask: CAT_WEIGHT },
-    label: 'trayWall',
-  })
-
-  // Constrain walls to floor so they move together
-  const cL = Constraint.create({
-    bodyA: floor,
-    pointA: { x: -hw - TRAY_WALL_THICK / 2, y: -30 },
-    bodyB: wallL,
-    pointB: { x: 0, y: 0 },
-    stiffness: 1,
-    length: 0,
-    render: { visible: false },
-  })
-  const cR = Constraint.create({
-    bodyA: floor,
-    pointA: { x: hw + TRAY_WALL_THICK / 2, y: -30 },
-    bodyB: wallR,
-    pointB: { x: 0, y: 0 },
-    stiffness: 1,
-    length: 0,
-    render: { visible: false },
-  })
-
-  // Keep walls upright relative to floor
-  const cL2 = Constraint.create({
-    bodyA: floor,
-    pointA: { x: -hw - TRAY_WALL_THICK / 2, y: -60 },
-    bodyB: wallL,
-    pointB: { x: 0, y: -30 },
-    stiffness: 1,
-    length: 0,
-    render: { visible: false },
-  })
-  const cR2 = Constraint.create({
-    bodyA: floor,
-    pointA: { x: hw + TRAY_WALL_THICK / 2, y: -60 },
-    bodyB: wallR,
-    pointB: { x: 0, y: -30 },
-    stiffness: 1,
-    length: 0,
-    render: { visible: false },
-  })
-
-  return { floor, wallL, wallR, constraints: [cL, cR, cL2, cR2] }
+  return compound
 }
 
 /* ---- Create a weight body ---- */
 function createWeight(x, y, trayGroup) {
   return Bodies.circle(x, y, WEIGHT_R, {
-    restitution: 0.25,
-    friction: 0.6,
-    frictionAir: 0.02,
-    density: 0.004,
+    restitution: 0.15,
+    friction: 0.5,
+    frictionAir: 0.01,
+    density: 0.003,
     render: {
       fillStyle: weightColor(trayGroup),
       strokeStyle: '#fff',
       lineWidth: 1.5,
     },
-    collisionFilter: { category: CAT_WEIGHT, mask: CAT_WEIGHT | CAT_TRAY | CAT_WALL },
+    collisionFilter: { category: CAT_WEIGHT, mask: CAT_WEIGHT | CAT_TRAY | CAT_STATIC },
     label: 'weight',
     trayGroup,
   })
+}
+
+/* Which tray region does a point fall into? */
+function trayAtPoint(x, y, trayBodies) {
+  for (const [label, tray] of Object.entries(trayBodies)) {
+    const tx = tray.position.x
+    const ty = tray.position.y
+    if (
+      x > tx - TRAY_INNER_W / 2 - 20 &&
+      x < tx + TRAY_INNER_W / 2 + 20 &&
+      y > ty - 100 &&
+      y < ty + 30
+    ) {
+      return label
+    }
+  }
+  return null
 }
 
 /* ===================== main component ===================== */
@@ -150,14 +116,12 @@ export default function AdditionBalance() {
   const engineRef = useRef(null)
   const renderRef = useRef(null)
   const runnerRef = useRef(null)
-  const trayFloorsRef = useRef({})
+  const trayBodiesRef = useRef({})
   const beamRef = useRef(null)
 
-  // Track counts for equation display
   const [counts, setCounts] = useState({ a: 3, b: 2, sum: 5 })
   const countsInterval = useRef(null)
 
-  /* Sync counts from physics world */
   const syncCounts = useCallback(() => {
     const engine = engineRef.current
     if (!engine) return
@@ -175,13 +139,12 @@ export default function AdditionBalance() {
     if (!canvas) return
 
     /* ---- engine ---- */
-    const engine = Engine.create({
-      gravity: { x: 0, y: 1.2 },
-    })
+    const engine = Engine.create({ gravity: { x: 0, y: 1.0 } })
     engineRef.current = engine
     const world = engine.world
 
     /* ---- renderer ---- */
+    const pr = window.devicePixelRatio || 1
     const render = Render.create({
       canvas,
       engine,
@@ -190,46 +153,42 @@ export default function AdditionBalance() {
         height: CANVAS_H,
         wireframes: false,
         background: 'transparent',
-        pixelRatio: window.devicePixelRatio || 1,
+        pixelRatio: pr,
       },
     })
     renderRef.current = render
 
-    /* ---- static structure: base & post ---- */
+    /* ---- layout ---- */
     const pivotX = CANVAS_W / 2
-    const pivotY = 110
-    const postH = 200
-    const baseW = 120
-    const baseH = 14
+    const pivotY = 90
+    const postH = 180
+    const baseW = 100
+    const baseH = 12
 
+    /* static base & post (decorative, no collision) */
     const base = Bodies.rectangle(pivotX, pivotY + postH + baseH / 2, baseW, baseH, {
       isStatic: true,
       render: { fillStyle: '#888' },
       collisionFilter: { category: 0, mask: 0 },
-      label: 'base',
     })
-
     const post = Bodies.rectangle(pivotX, pivotY + postH / 2, 6, postH, {
       isStatic: true,
       render: { fillStyle: '#999' },
       collisionFilter: { category: 0, mask: 0 },
-      label: 'post',
     })
 
     /* ---- beam ---- */
-    const beamLen = 440
-    const beamThick = 8
-    const beam = Bodies.rectangle(pivotX, pivotY, beamLen, beamThick, {
-      density: 0.005,
-      friction: 0.8,
+    const beamHalf = 170   // half-length
+    const beamThick = 7
+    const beam = Bodies.rectangle(pivotX, pivotY, beamHalf * 2, beamThick, {
+      density: 0.002,
+      friction: 0.5,
       render: { fillStyle: '#666' },
-      collisionFilter: { category: CAT_BEAM, mask: 0 },
-      label: 'beam',
+      collisionFilter: { category: 0, mask: 0 }, // beam doesn't collide with anything
     })
     beamRef.current = beam
 
-    // Pivot constraint - beam rotates around this point
-    const pivot = Constraint.create({
+    const pivotConstraint = Constraint.create({
       pointA: { x: pivotX, y: pivotY },
       bodyB: beam,
       pointB: { x: 0, y: 0 },
@@ -238,214 +197,212 @@ export default function AdditionBalance() {
       render: { visible: false },
     })
 
-    /* ---- trays ---- */
-    const chainLen = 100
-    const trayAx = pivotX - beamLen * 0.40
-    const trayBx = pivotX - beamLen * 0.15
-    const traySx = pivotX + beamLen * 0.38
-    const trayY = pivotY + chainLen
+    /* ---- tray positions (relative to beam center) ---- */
+    // Left side: tray A (outer) and tray B (inner)
+    // Right side: tray Sum
+    const attachA = -beamHalf * 0.85   // -144.5
+    const attachB = -beamHalf * 0.35   // -59.5
+    const attachS = beamHalf * 0.85    // +144.5
 
-    const trayA = createTray(trayAx, trayY, A_COLOR)
-    const trayB = createTray(trayBx, trayY, B_COLOR)
-    const trayS = createTray(traySx, trayY, SUM_COLOR)
+    const chainLen = 90
 
-    trayFloorsRef.current = { a: trayA.floor, b: trayB.floor, sum: trayS.floor }
+    // Create trays at their initial dangling positions
+    const trayABody = createTray(pivotX + attachA, pivotY + chainLen, A_COLOR)
+    const trayBBody = createTray(pivotX + attachB, pivotY + chainLen, B_COLOR)
+    const traySBody = createTray(pivotX + attachS, pivotY + chainLen, SUM_COLOR)
 
-    // Chains: connect beam endpoints to tray floors
-    function chainConstraint(beamOffsetX, trayFloor) {
-      return Constraint.create({
+    trayBodiesRef.current = { a: trayABody, b: trayBBody, sum: traySBody }
+
+    /* ---- chain constraints (beam → tray) ---- */
+    function makeChain(beamOffsetX, trayBody) {
+      // Two-point attachment for stability (left and right of tray top)
+      const spread = TRAY_INNER_W / 3
+      const c1 = Constraint.create({
         bodyA: beam,
-        pointA: { x: beamOffsetX, y: beamThick / 2 },
-        bodyB: trayFloor,
-        pointB: { x: 0, y: -TRAY_FLOOR_THICK / 2 },
-        stiffness: 0.95,
-        damping: 0.05,
-        length: chainLen - TRAY_FLOOR_THICK / 2,
-        render: {
-          strokeStyle: '#bbb',
-          lineWidth: 1.5,
-          type: 'line',
-        },
-        label: 'chain',
+        pointA: { x: beamOffsetX - spread / 2, y: beamThick / 2 },
+        bodyB: trayBody,
+        pointB: { x: -spread / 2, y: -TRAY_WALL_H / 2 },
+        stiffness: 0.8,
+        damping: 0.1,
+        length: chainLen - TRAY_WALL_H / 2,
+        render: { strokeStyle: '#bbb', lineWidth: 1.5 },
       })
+      const c2 = Constraint.create({
+        bodyA: beam,
+        pointA: { x: beamOffsetX + spread / 2, y: beamThick / 2 },
+        bodyB: trayBody,
+        pointB: { x: spread / 2, y: -TRAY_WALL_H / 2 },
+        stiffness: 0.8,
+        damping: 0.1,
+        length: chainLen - TRAY_WALL_H / 2,
+        render: { strokeStyle: '#bbb', lineWidth: 1.5 },
+      })
+      return [c1, c2]
     }
 
-    const chainA = chainConstraint(-beamLen * 0.40, trayA.floor)
-    const chainB = chainConstraint(-beamLen * 0.15, trayB.floor)
-    const chainS = chainConstraint(beamLen * 0.38, trayS.floor)
+    const chainsA = makeChain(attachA, trayABody)
+    const chainsB = makeChain(attachB, trayBBody)
+    const chainsS = makeChain(attachS, traySBody)
 
-    /* ---- supply zone (floor boundary) ---- */
-    const supplyFloor = Bodies.rectangle(CANVAS_W / 2, CANVAS_H + 20, CANVAS_W + 100, 50, {
+    /* ---- boundaries ---- */
+    const floor = Bodies.rectangle(CANVAS_W / 2, CANVAS_H + 25, CANVAS_W + 100, 50, {
       isStatic: true,
       render: { visible: false },
-      collisionFilter: { category: CAT_TRAY, mask: CAT_WEIGHT },
-      label: 'supplyFloor',
+      collisionFilter: { category: CAT_STATIC, mask: CAT_WEIGHT | CAT_TRAY },
     })
-
-    /* ---- invisible side walls ---- */
-    const wallLeft = Bodies.rectangle(-15, CANVAS_H / 2, 30, CANVAS_H * 2, {
+    const wallL = Bodies.rectangle(-15, CANVAS_H / 2, 30, CANVAS_H * 2, {
       isStatic: true,
       render: { visible: false },
-      collisionFilter: { category: CAT_WALL, mask: CAT_WEIGHT | CAT_TRAY },
+      collisionFilter: { category: CAT_STATIC, mask: CAT_WEIGHT | CAT_TRAY },
     })
-    const wallRight = Bodies.rectangle(CANVAS_W + 15, CANVAS_H / 2, 30, CANVAS_H * 2, {
+    const wallR = Bodies.rectangle(CANVAS_W + 15, CANVAS_H / 2, 30, CANVAS_H * 2, {
       isStatic: true,
       render: { visible: false },
-      collisionFilter: { category: CAT_WALL, mask: CAT_WEIGHT | CAT_TRAY },
+      collisionFilter: { category: CAT_STATIC, mask: CAT_WEIGHT | CAT_TRAY },
     })
 
-    /* ---- add everything to world ---- */
+    /* ---- add to world ---- */
     Composite.add(world, [
-      base, post, beam, pivot,
-      trayA.floor, trayA.wallL, trayA.wallR, ...trayA.constraints,
-      trayB.floor, trayB.wallL, trayB.wallR, ...trayB.constraints,
-      trayS.floor, trayS.wallL, trayS.wallR, ...trayS.constraints,
-      chainA, chainB, chainS,
-      supplyFloor, wallLeft, wallRight,
+      base, post, beam, pivotConstraint,
+      trayABody, trayBBody, traySBody,
+      ...chainsA, ...chainsB, ...chainsS,
+      floor, wallL, wallR,
     ])
 
-    /* ---- initial weights ---- */
-    function addInitialWeights(trayGroup, count, trayFloor) {
+    /* ---- initial weights (staggered drop to settle nicely) ---- */
+    const initialWeights = [
+      { group: 'a', count: 3, tray: trayABody },
+      { group: 'b', count: 2, tray: trayBBody },
+      { group: 'sum', count: 5, tray: traySBody },
+    ]
+    for (const { group, count, tray } of initialWeights) {
       for (let i = 0; i < count; i++) {
         const col = i % 2
         const row = Math.floor(i / 2)
-        const x = trayFloor.position.x + (col - 0.5) * (WEIGHT_R * 2.4)
-        const y = trayFloor.position.y - TRAY_FLOOR_THICK - WEIGHT_R - 4 - row * (WEIGHT_R * 2 + 3)
-        const w = createWeight(x, y, trayGroup)
-        Composite.add(world, w)
+        const x = tray.position.x + (col - 0.5) * (WEIGHT_R * 2.4)
+        const y = tray.position.y - TRAY_FLOOR_THICK / 2 - WEIGHT_R - 2 - row * (WEIGHT_R * 2.2)
+        Composite.add(world, createWeight(x, y, group))
       }
     }
 
-    addInitialWeights('a', 3, trayA.floor)
-    addInitialWeights('b', 2, trayB.floor)
-    addInitialWeights('sum', 5, trayS.floor)
-
-    /* ---- mouse interaction ---- */
+    /* ---- mouse ---- */
     const mouse = Mouse.create(canvas)
-    // Fix pixel ratio scaling
-    mouse.pixelRatio = render.options.pixelRatio
+    mouse.pixelRatio = pr
 
     const mouseConstraint = MouseConstraint.create(engine, {
       mouse,
       constraint: {
-        stiffness: 0.6,
-        damping: 0.1,
+        stiffness: 0.4,
+        damping: 0.15,
         render: { visible: false },
       },
       collisionFilter: { mask: CAT_WEIGHT },
     })
     Composite.add(world, mouseConstraint)
-
-    // Keep render's mouse in sync
     render.mouse = mouse
 
-    /* ---- supply zone: create new weight on click in supply area ---- */
-    const supplyY = CANVAS_H - 32
-    const supplyStartX = CANVAS_W / 2 - 7 * (WEIGHT_R * 2.6) / 2
-
+    /* ---- supply zone click: spawn a new weight ---- */
     Events.on(mouseConstraint, 'mousedown', (e) => {
       const { x, y } = e.mouse.position
-      // Only create from supply area if not clicking an existing body
       if (y > CANVAS_H - 60 && !mouseConstraint.body) {
-        const total = countWeightsInTray(engine, 'a') +
-          countWeightsInTray(engine, 'b') +
-          countWeightsInTray(engine, 'sum')
-        if (total < MAX_WEIGHTS * 3) {
+        const allWeights = Composite.allBodies(world).filter((b) => b.label === 'weight')
+        if (allWeights.length < MAX_WEIGHTS * 3) {
           const w = createWeight(x, y, 'supply')
           Composite.add(world, w)
         }
       }
     })
 
-    /* ---- on drag end: assign weight to tray or remove it ---- */
+    /* ---- on drop: assign to tray or remove ---- */
     Events.on(mouseConstraint, 'enddrag', (ev) => {
       const body = ev.body
       if (!body || body.label !== 'weight') return
-
       const { x, y } = body.position
-      const tray = trayAtPoint(engine, x, y, trayFloorsRef.current)
+      const tray = trayAtPoint(x, y, trayBodiesRef.current)
 
       if (tray) {
         body.trayGroup = tray
         body.render.fillStyle = weightColor(tray)
-      } else if (y > CANVAS_H - 70) {
-        // Dropped back in supply - remove it
-        Composite.remove(world, body)
       } else {
-        // Dropped in no-man's-land - remove
+        // dropped outside any tray — remove
         Composite.remove(world, body)
       }
     })
 
-    /* ---- angular damping on beam to prevent wild oscillation ---- */
+    /* ---- per-frame: clamp beam angle + damping ---- */
     Events.on(engine, 'beforeUpdate', () => {
-      // Limit beam angle to prevent flipping
-      if (beam.angle > 0.45) Body.setAngle(beam, 0.45)
-      if (beam.angle < -0.45) Body.setAngle(beam, -0.45)
+      const maxAngle = 0.35
+      if (beam.angle > maxAngle) {
+        Body.setAngle(beam, maxAngle)
+        Body.setAngularVelocity(beam, Math.min(beam.angularVelocity, 0))
+      }
+      if (beam.angle < -maxAngle) {
+        Body.setAngle(beam, -maxAngle)
+        Body.setAngularVelocity(beam, Math.max(beam.angularVelocity, 0))
+      }
 
-      // Extra angular damping
-      Body.setAngularVelocity(beam, beam.angularVelocity * 0.96)
+      // Angular damping for gentle settling
+      Body.setAngularVelocity(beam, beam.angularVelocity * 0.97)
 
-      // Remove bodies that fall way off screen
-      const allBodies = Composite.allBodies(world)
-      for (const b of allBodies) {
-        if (b.label === 'weight' && b.position.y > CANVAS_H + 100) {
+      // Clean up weights that somehow escape
+      for (const b of Composite.allBodies(world)) {
+        if (b.label === 'weight' && (b.position.y > CANVAS_H + 80 || b.position.x < -50 || b.position.x > CANVAS_W + 50)) {
           Composite.remove(world, b)
         }
       }
     })
 
-    /* ---- custom afterRender for decorations ---- */
+    /* ---- custom drawing overlays ---- */
     Events.on(render, 'afterRender', () => {
       const ctx = render.context
-      const pr = render.options.pixelRatio
-
       ctx.save()
       ctx.scale(pr, pr)
 
-      // Draw pivot triangle
+      // Pivot triangle
       ctx.beginPath()
-      ctx.moveTo(pivotX, pivotY - 14)
-      ctx.lineTo(pivotX - 10, pivotY + 5)
-      ctx.lineTo(pivotX + 10, pivotY + 5)
+      ctx.moveTo(pivotX, pivotY - 12)
+      ctx.lineTo(pivotX - 9, pivotY + 5)
+      ctx.lineTo(pivotX + 9, pivotY + 5)
       ctx.closePath()
       ctx.fillStyle = '#777'
       ctx.fill()
 
-      // Draw tray labels
+      // Tray labels
       const trays = [
-        { floor: trayA.floor, label: 'A', color: A_COLOR },
-        { floor: trayB.floor, label: 'B', color: B_COLOR },
-        { floor: trayS.floor, label: 'Sum', color: SUM_COLOR },
+        { body: trayABody, label: 'A', color: A_COLOR },
+        { body: trayBBody, label: 'B', color: B_COLOR },
+        { body: traySBody, label: 'Sum', color: SUM_COLOR },
       ]
-      ctx.font = 'bold 12px system-ui, -apple-system, sans-serif'
+      ctx.font = 'bold 11px system-ui, -apple-system, sans-serif'
       ctx.textAlign = 'center'
       for (const t of trays) {
         ctx.fillStyle = t.color
-        ctx.fillText(t.label, t.floor.position.x, t.floor.position.y + 20)
+        ctx.fillText(t.label, t.body.position.x, t.body.position.y + TRAY_FLOOR_THICK + 16)
       }
 
-      // Draw supply area
-      const sy = CANVAS_H - 56
+      // Supply area
+      const supplyTop = CANVAS_H - 52
       ctx.fillStyle = '#f5f5f3'
       ctx.strokeStyle = '#ddd'
       ctx.lineWidth = 1
       ctx.beginPath()
-      ctx.roundRect(20, sy, CANVAS_W - 40, 50, 8)
+      ctx.roundRect(24, supplyTop, CANVAS_W - 48, 46, 8)
       ctx.fill()
       ctx.stroke()
 
       ctx.fillStyle = '#bbb'
-      ctx.font = '500 11px system-ui, -apple-system, sans-serif'
+      ctx.font = '500 10px system-ui, -apple-system, sans-serif'
       ctx.textAlign = 'center'
-      ctx.fillText('SUPPLY — click to grab a weight, drag onto a tray', CANVAS_W / 2, sy + 16)
+      ctx.fillText('SUPPLY — click to grab a weight, drag onto a tray', CANVAS_W / 2, supplyTop + 14)
 
-      // Draw supply weight circles
-      for (let i = 0; i < 7; i++) {
-        const sx = supplyStartX + i * (WEIGHT_R * 2.6)
-        const scy = supplyY
+      // Supply circles
+      const supplyCircleY = CANVAS_H - 22
+      const supplyCount = 7
+      const startX = CANVAS_W / 2 - (supplyCount - 1) * (WEIGHT_R * 2.4) / 2
+      for (let i = 0; i < supplyCount; i++) {
+        const cx = startX + i * (WEIGHT_R * 2.4)
         ctx.beginPath()
-        ctx.arc(sx, scy, WEIGHT_R, 0, Math.PI * 2)
+        ctx.arc(cx, supplyCircleY, WEIGHT_R, 0, Math.PI * 2)
         ctx.fillStyle = '#999'
         ctx.fill()
         ctx.strokeStyle = '#fff'
@@ -462,10 +419,8 @@ export default function AdditionBalance() {
     Runner.run(runner, engine)
     Render.run(render)
 
-    /* ---- periodically sync counts ---- */
-    countsInterval.current = setInterval(syncCounts, 120)
+    countsInterval.current = setInterval(syncCounts, 100)
 
-    /* ---- cleanup ---- */
     return () => {
       clearInterval(countsInterval.current)
       Render.stop(render)
@@ -482,28 +437,24 @@ export default function AdditionBalance() {
   const IMBALANCE_BG = 'rgba(255, 59, 48, 0.08)'
   const IMBALANCE_BORDER = 'rgba(255, 59, 48, 0.25)'
 
-  /* ---- reset handler ---- */
   const handleReset = useCallback(() => {
     const engine = engineRef.current
     if (!engine) return
     const world = engine.world
 
-    // Remove all weights
     const weights = Composite.allBodies(world).filter((b) => b.label === 'weight')
     for (const w of weights) Composite.remove(world, w)
 
-    // Add back defaults
-    const floors = trayFloorsRef.current
+    const trays = trayBodiesRef.current
     const defaults = { a: 3, b: 2, sum: 5 }
     for (const [group, count] of Object.entries(defaults)) {
-      const floor = floors[group]
+      const tray = trays[group]
       for (let i = 0; i < count; i++) {
         const col = i % 2
         const row = Math.floor(i / 2)
-        const x = floor.position.x + (col - 0.5) * (WEIGHT_R * 2.4)
-        const y = floor.position.y - TRAY_FLOOR_THICK - WEIGHT_R - 4 - row * (WEIGHT_R * 2 + 3)
-        const w = createWeight(x, y, group)
-        Composite.add(world, w)
+        const x = tray.position.x + (col - 0.5) * (WEIGHT_R * 2.4)
+        const y = tray.position.y - TRAY_FLOOR_THICK / 2 - WEIGHT_R - 2 - row * (WEIGHT_R * 2.2)
+        Composite.add(world, createWeight(x, y, group))
       }
     }
   }, [])
@@ -515,7 +466,7 @@ export default function AdditionBalance() {
         Drag weights between trays or off-tray to remove them.
       </div>
 
-      {/* Big equation */}
+      {/* Equation */}
       <div
         style={{
           ...s.equation,
@@ -548,11 +499,8 @@ export default function AdditionBalance() {
         />
       </div>
 
-      {/* Reset button */}
       <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
-        <button onClick={handleReset} style={s.resetBtn}>
-          Reset weights
-        </button>
+        <button onClick={handleReset} style={s.resetBtn}>Reset weights</button>
       </div>
 
       {/* Insight */}
