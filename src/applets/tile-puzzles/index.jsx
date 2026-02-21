@@ -327,29 +327,49 @@ export default function TilePuzzles() {
   /* ---- compute tray positions with wrapping ---- */
   const trayLayout = useMemo(() => {
     const maxW = svgW - PAD * 2
-    const positions = []
+    const GAP = 10
+    const TRAY_PAD_Y = 8
+
+    // first pass: assign rows
+    const rowItems = [[]] // array of rows, each row is array of { piece, pw, ph }
     let x = 0
-    let row = 0
     for (const piece of trayPieces) {
       const cells = getCells(piece)
       const maxC = Math.max(...cells.map(([, c]) => c)) + 1
+      const maxR = Math.max(...cells.map(([r]) => r)) + 1
       const pw = maxC * CELL * TRAY_SCALE
+      const ph = maxR * CELL * TRAY_SCALE
       if (x > 0 && x + pw > maxW) {
+        rowItems.push([])
         x = 0
-        row++
       }
-      positions.push({
-        piece,
-        x: PAD + x,
-        y: trayY + 16 + row * TRAY_ROW_H,
-        w: pw,
-      })
-      x += pw + 10
+      rowItems[rowItems.length - 1].push({ piece, pw, ph })
+      x += pw + GAP
     }
-    const trayRows = row + 1
-    const trayH = 16 + trayRows * TRAY_ROW_H + 8
+
+    // second pass: center each row horizontally, center pieces vertically in row
+    const positions = []
+    let curY = trayY + TRAY_PAD_Y
+    for (const row of rowItems) {
+      const totalW = row.reduce((s, it) => s + it.pw, 0) + (row.length - 1) * GAP
+      const rowH = Math.max(...row.map(it => it.ph), TRAY_ROW_H)
+      // center under the grid, not the full SVG (which includes sum gutter)
+      const gridCenterX = gridX + (gridW * CELL) / 2
+      let curX = gridCenterX - totalW / 2
+      for (const { piece, pw, ph } of row) {
+        positions.push({
+          piece,
+          x: curX,
+          y: curY + (rowH - ph) / 2,
+          w: pw,
+        })
+        curX += pw + GAP
+      }
+      curY += rowH + TRAY_PAD_Y
+    }
+    const trayH = curY - trayY + TRAY_PAD_Y
     return { positions, trayH }
-  }, [trayPieces, svgW, trayY])
+  }, [trayPieces, svgW, trayY, gridX, gridW])
   const svgH = trayY + trayLayout.trayH + PAD
 
   /* ---- running sum of placed squares ---- */
@@ -703,21 +723,6 @@ export default function TilePuzzles() {
             </g>
           )
         })()}
-
-        {/* tray background */}
-        <rect
-          x={PAD - 2} y={trayY - 4}
-          width={svgW - PAD * 2 + 4} height={trayLayout.trayH + 8}
-          rx={8} fill="#fafaf8" stroke="#e8e8e6" strokeWidth={1}
-        />
-        <text
-          x={PAD + 4} y={trayY + 12}
-          fontSize={10} fill="#bbb"
-          fontFamily="system-ui, sans-serif"
-          style={{ pointerEvents: 'none' }}
-        >
-          Pieces — tap to select, tap again to rotate, drag to place
-        </text>
 
         {/* tray pieces */}
         {renderTrayPieces()}
