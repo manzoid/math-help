@@ -119,14 +119,53 @@ export default function TilePuzzles() {
     gridRef.current = next
     _setGrid(next)
   }
-  const [selectedId, setSelectedId] = useState(null)
-  const prePickRotation = useRef(null) // rotation before pick-up, to restore on cancel
   const [drag, _setDrag] = useState(null)
   const dragRef = useRef(null)
   const setDrag = (v) => { dragRef.current = v; _setDrag(v) }
   const [completed, setCompleted] = useState(false)
   const [confetti, setConfetti] = useState(null)
   const dragStart = useRef(null)
+
+  /* ---- circular gesture recognition for rotation ---- */
+  // Tracks the cumulative turning angle between consecutive displacement
+  // vectors.  Linear drags produce ~0 turn; circular sweeps accumulate
+  // quickly.  ~180° of accumulated turn triggers a rotation.
+  const gestureRef = useRef({ points: [], totalTurn: 0 })
+  const TURN_THRESHOLD = Math.PI // 180° of turning triggers rotation
+
+  function resetGesture() {
+    gestureRef.current = { points: [], totalTurn: 0 }
+  }
+
+  /** Returns 1 (CW), -1 (CCW), or 0 (no rotation yet) */
+  function updateGesture(x, y) {
+    const g = gestureRef.current
+    g.points.push({ x, y })
+    if (g.points.length > 30) g.points.splice(0, g.points.length - 25)
+    if (g.points.length < 3) return 0
+
+    const n = g.points.length
+    const p0 = g.points[n - 3]
+    const p1 = g.points[n - 2]
+    const p2 = g.points[n - 1]
+
+    // consecutive displacement vectors
+    const v1x = p1.x - p0.x, v1y = p1.y - p0.y
+    const v2x = p2.x - p1.x, v2y = p2.y - p1.y
+
+    const len1 = Math.sqrt(v1x * v1x + v1y * v1y)
+    const len2 = Math.sqrt(v2x * v2x + v2y * v2y)
+    if (len1 < 1 || len2 < 1) return 0 // skip jitter
+
+    // signed turning angle (positive = CW in screen coords)
+    const cross = v1x * v2y - v1y * v2x
+    const dot = v1x * v2x + v1y * v2y
+    g.totalTurn += Math.atan2(cross, dot)
+
+    if (g.totalTurn > TURN_THRESHOLD) { resetGesture(); return 1 }
+    if (g.totalTurn < -TURN_THRESHOLD) { resetGesture(); return -1 }
+    return 0
+  }
 
   // trigger confetti on completion
   useEffect(() => {
@@ -233,7 +272,6 @@ export default function TilePuzzles() {
       setGrid(makeGrid(lv.gridWidth, lv.gridHeight))
       setCompleted(false)
     }
-    setSelectedId(null)
     setDrag(null)
     setConfetti(null)
   }
@@ -242,7 +280,6 @@ export default function TilePuzzles() {
     delete levelCache.current[levelIndex]
     setPieces(initPieces(level))
     setGrid(makeGrid(gridW, gridH))
-    setSelectedId(null)
     setDrag(null)
     setCompleted(false)
     setConfetti(null)
@@ -265,20 +302,8 @@ export default function TilePuzzles() {
     }
     setPieces(newPieces)
     setGrid(newGrid)
-    setSelectedId(null)
     setDrag(null)
     setCompleted(true)
-  }
-
-  /* ---- cancel selection: put piece back with original rotation ---- */
-  function cancelSelection() {
-    if (selectedId !== null && prePickRotation.current !== null) {
-      setPieces(prev => prev.map(p =>
-        p.id === selectedId ? { ...p, rotation: prePickRotation.current } : p
-      ))
-    }
-    setSelectedId(null)
-    prePickRotation.current = null
   }
 
   /* ---- pointer handlers ---- */
@@ -289,9 +314,19 @@ export default function TilePuzzles() {
     svg.setPointerCapture(e.pointerId)
 
     const p = toSVG(e.clientX, e.clientY)
+    const piece = piecesRef.current.find(pp => pp.id === pieceId)
+
+    resetGesture()
     dragStart.current = { x: p.x, y: p.y, pieceId, moved: false }
 
-    setDrag({ pieceId, svgX: p.x, svgY: p.y, snapRow: null, snapCol: null })
+    setDrag({
+      pieceId,
+      svgX: p.x,
+      svgY: p.y - DRAG_LIFT,
+      snapRow: null,
+      snapCol: null,
+      originalRotation: piece ? piece.rotation : 0,
+    })
   }
 
   function onGridPieceDown(e, pieceId) {
@@ -302,17 +337,22 @@ export default function TilePuzzles() {
 
   function onPointerMove(e) {
     if (!dragStart.current) return
-    const p = toSVG(e.clientX, e.clientY)
-
     if (dragStart.current.isGrid) return // grid taps only
 
-    const dx = p.x - dragStart.current.x
-    const dy = p.y - dragStart.current.y
-    if (Math.sqrt(dx * dx + dy * dy) > TAP_THRESHOLD) {
-      dragStart.current.moved = true
-    }
+    const p = toSVG(e.clientX, e.clientY)
 
-    if (!dragStart.current.moved) return
+    // circular gesture detection for rotation
+    const rot = updateGesture(p.x, p.y)
+    if (rot !== 0) {
+      const d = dragRef.current
+      if (d) {
+        setPieces(prev => prev.map(pp =>
+          pp.id === d.pieceId
+            ? { ...pp, rotation: (pp.rotation + (rot > 0 ? 1 : 3)) % 4 }
+            : pp
+        ))
+      }
+    }
 
     const piece = piecesRef.current.find(pp => pp.id === dragStart.current.pieceId)
     if (!piece) return
@@ -327,6 +367,7 @@ export default function TilePuzzles() {
       svgY: liftedY,
       snapRow: valid ? snap.row : null,
       snapCol: valid ? snap.col : null,
+      originalRotation: dragRef.current?.originalRotation ?? 0,
     })
   }
 
@@ -343,30 +384,18 @@ export default function TilePuzzles() {
       return
     }
 
-    if (!ds.moved) {
-      // Tap on tray piece
-      if (selectedId === ds.pieceId) {
-        // Already held → rotate
-        setPieces(pieces.map(p =>
-          p.id === ds.pieceId ? { ...p, rotation: (p.rotation + 1) % 4 } : p
-        ))
-      } else {
-        // Pick up: store current rotation so we can restore on cancel
-        const piece = piecesRef.current.find(p => p.id === ds.pieceId)
-        prePickRotation.current = piece ? piece.rotation : 0
-        setSelectedId(ds.pieceId)
-      }
-      setDrag(null)
-      return
-    }
-
-    // Drop after drag
+    // Tray piece release: place if valid snap, else rubber-band back
     const d = dragRef.current
     if (d && d.snapRow !== null && d.snapCol !== null) {
       placePiece(ds.pieceId, d.snapRow, d.snapCol)
-      setSelectedId(null)
+    } else if (d) {
+      // restore original rotation
+      setPieces(prev => prev.map(pp =>
+        pp.id === ds.pieceId ? { ...pp, rotation: d.originalRotation } : pp
+      ))
     }
     setDrag(null)
+    resetGesture()
   }
 
   /* ---- tray layout for unplaced pieces ---- */
@@ -579,16 +608,15 @@ export default function TilePuzzles() {
 
   function renderTrayPieces() {
     return trayLayout.positions.map(({ piece, x, y }) => {
-      const isSelected = selectedId === piece.id
-      const isDragging = drag?.pieceId === piece.id && dragStart.current?.moved
+      const isHeld = drag?.pieceId === piece.id
       // tray always shows base shape (rotation 0)
       const baseCells = piece.baseShape
       const S = CELL * TRAY_SCALE
 
-      if (isSelected && !isDragging) {
-        // show ghost outline in tray slot, piece is "lifted" (rendered separately)
+      if (isHeld) {
+        // ghost outline in tray slot while piece is held
         return (
-          <g key={piece.id} onPointerDown={(e) => onTrayPieceDown(e, piece.id)}>
+          <g key={piece.id}>
             <rect
               x={x - 2} y={y - 2}
               width={(Math.max(...baseCells.map(([,c]) => c)) + 1) * S + 4}
@@ -608,7 +636,6 @@ export default function TilePuzzles() {
         <g key={piece.id}
           onPointerDown={(e) => onTrayPieceDown(e, piece.id)}
           style={{ cursor: 'grab' }}
-          opacity={isDragging ? 0.2 : 1}
         >
           {baseCells.map(([r, c], i) => (
             <g key={i}>
@@ -636,55 +663,6 @@ export default function TilePuzzles() {
     })
   }
 
-  /* ---- render the "lifted" selected piece above tray ---- */
-  function renderLiftedPiece() {
-    if (selectedId === null) return null
-    const pos = trayLayout.positions.find(p => p.piece.id === selectedId)
-    if (!pos) return null
-    const piece = pos.piece
-    const isDragging = drag?.pieceId === piece.id && dragStart.current?.moved
-    if (isDragging) return null
-
-    const cells = getCells(piece) // current rotation
-    const S = CELL * TRAY_SCALE
-    const baseCells = piece.baseShape
-    const slotW = (Math.max(...baseCells.map(([,c]) => c)) + 1) * S
-    const slotH = (Math.max(...baseCells.map(([r]) => r)) + 1) * S
-    const pieceW = (Math.max(...cells.map(([,c]) => c)) + 1) * S
-    const pieceH = (Math.max(...cells.map(([r]) => r)) + 1) * S
-    // center lifted piece over its tray slot
-    const lx = pos.x + (slotW - pieceW) / 2
-    const ly = pos.y + (slotH - pieceH) / 2 - 8 // slight lift
-
-    return (
-      <g onPointerDown={(e) => onTrayPieceDown(e, piece.id)}
-        style={{ cursor: 'grab', filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.3))' }}
-      >
-        {cells.map(([r, c], i) => (
-          <g key={i}>
-            {bevelCell(lx + c * S, ly + r * S, piece.color, S)}
-          </g>
-        ))}
-        {(() => {
-          const [lr, lc] = labelCell(cells)
-          return (
-            <text
-              x={lx + lc * S + S / 2}
-              y={ly + lr * S + S / 2}
-              textAnchor="middle" dominantBaseline="central"
-              fontSize={12} fontWeight={700}
-              fill="#fff" opacity={0.85}
-              fontFamily="system-ui, sans-serif"
-              style={{ pointerEvents: 'none' }}
-            >
-              {level.pieceSize}
-            </text>
-          )
-        })()}
-      </g>
-    )
-  }
-
   function renderDragGhost() {
     if (!drag || drag.snapRow === null || drag.snapCol === null) return null
     const piece = pieces.find(p => p.id === drag.pieceId)
@@ -709,7 +687,7 @@ export default function TilePuzzles() {
   }
 
   function renderDragPiece() {
-    if (!drag || !dragStart.current?.moved) return null
+    if (!drag) return null
     const piece = pieces.find(p => p.id === drag.pieceId)
     if (!piece) return null
     const cells = getCells(piece)
@@ -721,7 +699,7 @@ export default function TilePuzzles() {
     const cy = ((maxR - minR + 1) * CELL) / 2
 
     return (
-      <g style={{ pointerEvents: 'none' }} opacity={0.85}>
+      <g style={{ pointerEvents: 'none', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }} opacity={0.9}>
         {cells.map(([r, c], i) => {
           const dx = drag.svgX + (c - minC) * CELL - cx
           const dy = drag.svgY + (r - minR) * CELL - cy
@@ -784,7 +762,7 @@ export default function TilePuzzles() {
       <svg
         ref={svgRef}
         viewBox={`0 0 ${svgW} ${svgH}`}
-        onPointerDown={(e) => { if (e.target === svgRef.current) cancelSelection() }}
+        onPointerDown={() => {}}
         style={styles.svg}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -794,7 +772,7 @@ export default function TilePuzzles() {
           x={gridX - 2} y={PAD - 2}
           width={gridW * CELL + 4} height={gridH * CELL + 4}
           rx={8} fill="transparent" stroke="#ddd" strokeWidth={2}
-          onPointerDown={() => cancelSelection()}
+          onPointerDown={() => {}}
         />
 
         {/* grid cells */}
@@ -805,7 +783,7 @@ export default function TilePuzzles() {
         {/* big running sum to the right of the grid */}
         {(() => {
           const sumX = gridX + gridW * CELL + SUM_GUTTER / 2
-          const sumY = PAD + (gridH * CELL) / 2
+          const sumY = PAD + gridH * CELL - 23
           return (
             <g style={{ pointerEvents: 'none' }}>
               {/* main number with gradient fill */}
@@ -834,9 +812,6 @@ export default function TilePuzzles() {
 
         {/* tray pieces */}
         {renderTrayPieces()}
-
-        {/* lifted/selected piece above tray */}
-        {renderLiftedPiece()}
 
         {/* drag snap preview */}
         {renderDragGhost()}
