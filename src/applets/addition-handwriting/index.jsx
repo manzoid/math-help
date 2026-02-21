@@ -232,8 +232,9 @@ export default function AdditionHandwriting() {
     }
   }, [])
 
-  /* ---- set up canvas size ---- */
+  /* ---- set up canvas size once it's in the DOM ---- */
   useEffect(() => {
+    if (!modelReady) return
     const canvas = canvasRef.current
     if (!canvas) return
     const rect = canvas.getBoundingClientRect()
@@ -246,7 +247,7 @@ export default function AdditionHandwriting() {
     ctx.lineJoin = 'round'
     ctx.lineWidth = 6
     ctx.strokeStyle = '#333'
-  }, [])
+  }, [modelReady])
 
   /* ---- pointer handlers for drawing ---- */
   const onPointerDown = useCallback((e) => {
@@ -256,32 +257,31 @@ export default function AdditionHandwriting() {
     setDrawing(true)
 
     const rect = canvas.getBoundingClientRect()
-    const pr = window.devicePixelRatio || 1
-    const x = (e.clientX - rect.left)
-    const y = (e.clientY - rect.top)
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
 
+    // ctx.scale(pr) was applied in setup, so use CSS-pixel coords
     const ctx = canvas.getContext('2d')
     ctx.lineWidth = 6
     ctx.strokeStyle = '#333'
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
     ctx.beginPath()
-    ctx.moveTo(x * pr, y * pr)
+    ctx.moveTo(x, y)
   }, [modelReady, result])
 
   const onPointerMove = useCallback((e) => {
     if (!drawing) return
     const canvas = canvasRef.current
     const rect = canvas.getBoundingClientRect()
-    const pr = window.devicePixelRatio || 1
-    const x = (e.clientX - rect.left)
-    const y = (e.clientY - rect.top)
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
 
     const ctx = canvas.getContext('2d')
-    ctx.lineTo(x * pr, y * pr)
+    ctx.lineTo(x, y)
     ctx.stroke()
     ctx.beginPath()
-    ctx.moveTo(x * pr, y * pr)
+    ctx.moveTo(x, y)
   }, [drawing])
 
   const onPointerUp = useCallback(() => {
