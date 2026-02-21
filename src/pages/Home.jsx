@@ -68,7 +68,6 @@ export default function Home() {
         <h1 style={styles.title}>Math Help</h1>
         <p style={styles.description}>
           Interactive visualizations that make math click.
-          Each applet focuses on one idea and shows it multiple ways.
         </p>
       </header>
 
