@@ -25,6 +25,13 @@ const applets = [
     tags: ['addition', 'patterns', 'ages 4-6'],
     component: lazy(() => import('./addition-lockstep/index.jsx')),
   },
+  {
+    slug: 'addition-dial',
+    title: 'Dial Addition',
+    subtitle: 'Dial either addend up or down and the sum follows',
+    tags: ['addition', 'patterns', 'ages 4-6'],
+    component: lazy(() => import('./addition-dial/index.jsx')),
+  },
 ]
 
 export default applets
