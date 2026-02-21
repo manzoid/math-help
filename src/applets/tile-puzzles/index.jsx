@@ -9,6 +9,7 @@ const TRAY_GAP = 20
 const TRAY_SCALE = 0.55
 const TAP_THRESHOLD = 5
 const DRAG_LIFT = 90 // lift drag piece above finger
+const SUM_GUTTER = 80 // space to the right of grid for the running sum
 
 /* ---- Fisher-Yates shuffle ---- */
 function shuffle(arr) {
@@ -114,7 +115,7 @@ export default function TilePuzzles() {
   /* ---- derived layout ---- */
   const gridW = level.gridWidth
   const gridH = level.gridHeight
-  const svgW = Math.max(gridW * CELL + PAD * 2, 320)
+  const svgW = Math.max(gridW * CELL + PAD * 2 + SUM_GUTTER, 320)
   const trayY = PAD + gridH * CELL + TRAY_GAP
   const svgH = trayY + TRAY_H + PAD
 
@@ -359,6 +360,23 @@ export default function TilePuzzles() {
     return positions
   }
 
+  /* ---- running sum of placed squares ---- */
+  const placedSum = useMemo(() => {
+    return pieces.filter(p => p.placed).length * level.pieceSize
+  }, [pieces, level.pieceSize])
+  const totalArea = gridW * gridH
+
+  /* ---- find the rightmost (then bottommost) cell for number label ---- */
+  function labelCell(cells) {
+    let best = cells[0]
+    for (const cell of cells) {
+      if (cell[1] > best[1] || (cell[1] === best[1] && cell[0] > best[0])) {
+        best = cell
+      }
+    }
+    return best
+  }
+
   /* ============================================================== */
   /*  SVG rendering                                                  */
   /* ============================================================== */
@@ -388,6 +406,34 @@ export default function TilePuzzles() {
       }
     }
     return rects
+  }
+
+  function renderGridNumbers() {
+    const seen = new Set()
+    const labels = []
+    for (const piece of pieces) {
+      if (!piece.placed || seen.has(piece.id)) continue
+      seen.add(piece.id)
+      const cells = getCells(piece)
+      const [lr, lc] = labelCell(cells)
+      const gx = PAD + (piece.gridCol + lc) * CELL + CELL / 2
+      const gy = PAD + (piece.gridRow + lr) * CELL + CELL / 2
+      labels.push(
+        <text
+          key={`num-${piece.id}`}
+          x={gx} y={gy}
+          textAnchor="middle" dominantBaseline="central"
+          fontSize={18} fontWeight={700}
+          fill="#fff"
+          opacity={0.85}
+          fontFamily="system-ui, sans-serif"
+          style={{ pointerEvents: 'none' }}
+        >
+          {level.pieceSize}
+        </text>
+      )
+    }
+    return labels
   }
 
   function renderTrayPieces() {
@@ -426,6 +472,22 @@ export default function TilePuzzles() {
               strokeWidth={1.5}
             />
           ))}
+          {(() => {
+            const [lr, lc] = labelCell(cells)
+            return (
+              <text
+                x={x + lc * CELL * TRAY_SCALE + CELL * TRAY_SCALE / 2}
+                y={y + lr * CELL * TRAY_SCALE + CELL * TRAY_SCALE / 2}
+                textAnchor="middle" dominantBaseline="central"
+                fontSize={12} fontWeight={700}
+                fill="#fff" opacity={0.85}
+                fontFamily="system-ui, sans-serif"
+                style={{ pointerEvents: 'none' }}
+              >
+                {level.pieceSize}
+              </text>
+            )
+          })()}
         </g>
       )
     })
@@ -541,35 +603,55 @@ export default function TilePuzzles() {
     ))
   }
 
-  function renderCompletion() {
-    if (!completed) return null
-    const cx = PAD + (gridW * CELL) / 2
-    const cy = PAD + (gridH * CELL) / 2
+  function renderRunningSum() {
+    const sx = PAD + gridW * CELL + SUM_GUTTER / 2
+    const sy = PAD + (gridH * CELL) / 2
+    const isFull = completed
+    const fontSize = totalArea >= 10 ? 38 : 46
+
     return (
       <g style={{ pointerEvents: 'none' }}>
-        <rect
-          x={PAD} y={PAD}
-          width={gridW * CELL} height={gridH * CELL}
-          rx={8}
-          fill="rgba(52,199,89,0.12)"
-        />
+        {/* sum number */}
+        <g style={isFull ? { transformOrigin: `${sx}px ${sy}px`, animation: 'sumCelebrate 0.6s ease-out' } : undefined}>
+          <text
+            x={sx} y={sy}
+            textAnchor="middle" dominantBaseline="central"
+            fontSize={fontSize} fontWeight={800}
+            fill={isFull ? '#34c759' : 'var(--color-muted, #999)'}
+            fontFamily="system-ui, sans-serif"
+          >
+            {placedSum}
+          </text>
+        </g>
+        {/* target label */}
         <text
-          x={cx} y={cy - 6}
-          textAnchor="middle" dominantBaseline="middle"
-          fontSize={28} fontWeight={700}
-          fill="#34c759"
+          x={sx} y={sy + 28}
+          textAnchor="middle" dominantBaseline="central"
+          fontSize={11} fontWeight={600}
+          fill={isFull ? '#34c759' : '#ccc'}
           fontFamily="system-ui, sans-serif"
         >
-          Complete!
+          / {totalArea}
         </text>
-        <text
-          x={cx} y={cy + 22}
-          textAnchor="middle" dominantBaseline="middle"
-          fontSize={22}
-          fill="#34c759"
-        >
-          ✓
-        </text>
+        {/* celebration ring */}
+        {isFull && (
+          <>
+            <circle
+              cx={sx} cy={sy}
+              r={32} fill="none"
+              stroke="#34c759" strokeWidth={3}
+              opacity={0.6}
+              style={{ animation: 'sumRing 0.8s ease-out forwards' }}
+            />
+            <circle
+              cx={sx} cy={sy}
+              r={20} fill="none"
+              stroke="#34c759" strokeWidth={2}
+              opacity={0.4}
+              style={{ animation: 'sumRing 0.8s ease-out 0.15s forwards' }}
+            />
+          </>
+        )}
       </g>
     )
   }
@@ -605,6 +687,10 @@ export default function TilePuzzles() {
 
         {/* grid cells */}
         {renderGrid()}
+        {renderGridNumbers()}
+
+        {/* running sum */}
+        {renderRunningSum()}
 
         {/* hints */}
         {renderHints()}
@@ -634,8 +720,20 @@ export default function TilePuzzles() {
         {/* dragging piece */}
         {renderDragPiece()}
 
-        {/* completion overlay */}
-        {renderCompletion()}
+        {/* CSS animations for celebration */}
+        <defs>
+          <style>{`
+            @keyframes sumCelebrate {
+              0% { transform: scale(1); }
+              40% { transform: scale(1.35); }
+              100% { transform: scale(1); }
+            }
+            @keyframes sumRing {
+              0% { r: 10; opacity: 0.7; stroke-width: 4; }
+              100% { r: 44; opacity: 0; stroke-width: 1; }
+            }
+          `}</style>
+        </defs>
       </svg>
 
       {/* controls */}
