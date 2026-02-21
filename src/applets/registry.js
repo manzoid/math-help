@@ -46,6 +46,11 @@ const applets = [
     tags: ['addition', 'handwriting', 'ages 4-6'],
     component: lazy(() => import('./addition-handwriting/index.jsx')),
   },
+  {
+    slug: 'tile-puzzles',
+    title: 'Tile Puzzles',
+    component: lazy(() => import('./tile-puzzles/index.jsx')),
+  },
 ]
 
 export default applets
