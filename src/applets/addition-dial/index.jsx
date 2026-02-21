@@ -5,100 +5,11 @@ const B_COLOR = '#ff9500'
 const SUM_COLOR = '#34c759'
 const MAX = 20
 
-/**
- * A single number that acts like a dial.
- * - drag up/down to change value
- * - scroll wheel to change value
- * - tap chevrons to nudge ±1
- */
-function Dial({ value, onChange, color }) {
-  const ref = useRef(null)
-  const dragging = useRef(false)
-  const startY = useRef(0)
-  const startVal = useRef(0)
-
-  const clamp = (n) => Math.max(0, Math.min(MAX, n))
-
-  /* ---- pointer drag ---- */
-  const onPointerDown = useCallback(
-    (e) => {
-      e.preventDefault()
-      dragging.current = true
-      startY.current = e.clientY
-      startVal.current = value
-      ref.current?.setPointerCapture(e.pointerId)
-    },
-    [value],
-  )
-
-  const onPointerMove = useCallback(
-    (e) => {
-      if (!dragging.current) return
-      const dy = startY.current - e.clientY // up = positive
-      const steps = Math.round(dy / 18)
-      const next = clamp(startVal.current + steps)
-      if (next !== value) onChange(next)
-    },
-    [value, onChange],
-  )
-
-  const onPointerUp = useCallback((e) => {
-    dragging.current = false
-    ref.current?.releasePointerCapture(e.pointerId)
-  }, [])
-
-  /* ---- scroll wheel (throttled) ---- */
-  const scrollAccum = useRef(0)
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const handler = (e) => {
-      e.preventDefault()
-      scrollAccum.current += e.deltaY
-      const threshold = 80
-      if (Math.abs(scrollAccum.current) >= threshold) {
-        const dir = scrollAccum.current < 0 ? 1 : -1
-        onChange(clamp(value + dir))
-        scrollAccum.current = 0
-      }
-    }
-    el.addEventListener('wheel', handler, { passive: false })
-    return () => el.removeEventListener('wheel', handler)
-  }, [value, onChange])
-
-  return (
-    <div style={s.dialWrapper}>
-      <button
-        style={s.chevron}
-        onClick={() => onChange(clamp(value + 1))}
-        aria-label="increase"
-      >
-        &#x25B2;
-      </button>
-
-      <div
-        ref={ref}
-        style={{ ...s.dialWindow, borderColor: color }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-      >
-        <div style={{ ...s.dialValue, color }}>{value}</div>
-      </div>
-
-      <button
-        style={s.chevron}
-        onClick={() => onChange(clamp(value - 1))}
-        aria-label="decrease"
-      >
-        &#x25BC;
-      </button>
-    </div>
-  )
+function clamp(n) {
+  return Math.max(0, Math.min(MAX, n))
 }
 
-/** Dots arranged 2-across below a number */
+/** Dots arranged 2-across */
 function DotGrid({ count, color }) {
   return (
     <div style={s.dotGrid}>
@@ -116,6 +27,104 @@ function DotGrid({ count, color }) {
   )
 }
 
+/**
+ * A draggable column: dial number on top, dots below.
+ * The entire column is the drag/scroll target so your finger
+ * can rest on the dots while the number stays visible above.
+ */
+function DialColumn({ value, onChange, color }) {
+  const colRef = useRef(null)
+  const dragging = useRef(false)
+  const startY = useRef(0)
+  const startVal = useRef(0)
+
+  /* ---- pointer drag (whole column) ---- */
+  const onPointerDown = useCallback(
+    (e) => {
+      // let chevron buttons handle their own clicks
+      if (e.target.closest('button')) return
+      e.preventDefault()
+      dragging.current = true
+      startY.current = e.clientY
+      startVal.current = value
+      colRef.current?.setPointerCapture(e.pointerId)
+    },
+    [value],
+  )
+
+  const onPointerMove = useCallback(
+    (e) => {
+      if (!dragging.current) return
+      const dy = startY.current - e.clientY
+      const steps = Math.round(dy / 18)
+      const next = clamp(startVal.current + steps)
+      if (next !== value) onChange(next)
+    },
+    [value, onChange],
+  )
+
+  const onPointerUp = useCallback((e) => {
+    dragging.current = false
+    colRef.current?.releasePointerCapture(e.pointerId)
+  }, [])
+
+  /* ---- scroll wheel (throttled, whole column) ---- */
+  const scrollAccum = useRef(0)
+  useEffect(() => {
+    const el = colRef.current
+    if (!el) return
+    const handler = (e) => {
+      e.preventDefault()
+      scrollAccum.current += e.deltaY
+      const threshold = 80
+      if (Math.abs(scrollAccum.current) >= threshold) {
+        const dir = scrollAccum.current < 0 ? 1 : -1
+        onChange(clamp(value + dir))
+        scrollAccum.current = 0
+      }
+    }
+    el.addEventListener('wheel', handler, { passive: false })
+    return () => el.removeEventListener('wheel', handler)
+  }, [value, onChange])
+
+  return (
+    <div
+      ref={colRef}
+      style={s.column}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+    >
+      {/* chevron up */}
+      <button
+        style={s.chevron}
+        onClick={() => onChange(clamp(value + 1))}
+        aria-label="increase"
+      >
+        &#x25B2;
+      </button>
+
+      {/* number display */}
+      <div style={{ ...s.dialWindow, borderColor: color }}>
+        <div style={{ ...s.dialValue, color }}>{value}</div>
+      </div>
+
+      {/* chevron down */}
+      <button
+        style={s.chevron}
+        onClick={() => onChange(clamp(value - 1))}
+        aria-label="decrease"
+      >
+        &#x25BC;
+      </button>
+
+      {/* dots */}
+      <DotGrid count={value} color={color} />
+    </div>
+  )
+}
+
 export default function AdditionDial() {
   const [a, setA] = useState(5)
   const [b, setB] = useState(6)
@@ -124,35 +133,22 @@ export default function AdditionDial() {
   return (
     <div style={s.root}>
       <div style={s.hint}>
-        Drag a number up or down &mdash; watch the sum follow!
+        Drag up or down on the dots &mdash; watch the sum follow!
       </div>
 
-      {/* Equation with dials, dots directly below each */}
       <div style={s.equation}>
-        {/* first addend column */}
-        <div style={s.column}>
-          <Dial value={a} onChange={setA} color={A_COLOR} />
-          <DotGrid count={a} color={A_COLOR} />
-        </div>
-
+        <DialColumn value={a} onChange={setA} color={A_COLOR} />
         <span style={s.op}>+</span>
-
-        {/* second addend column */}
-        <div style={s.column}>
-          <Dial value={b} onChange={setB} color={B_COLOR} />
-          <DotGrid count={b} color={B_COLOR} />
-        </div>
-
+        <DialColumn value={b} onChange={setB} color={B_COLOR} />
         <span style={s.op}>=</span>
 
-        {/* sum column */}
+        {/* sum column (not draggable) */}
         <div style={s.column}>
           <div style={{ ...s.sumDisplay, color: SUM_COLOR }}>{sum}</div>
           <DotGrid count={sum} color={SUM_COLOR} />
         </div>
       </div>
 
-      {/* Insight */}
       <div style={s.insight}>
         <div style={s.insightTitle}>The pattern</div>
         <p style={s.insightText}>
@@ -194,7 +190,9 @@ const s = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '0.75rem',
+    gap: '0.5rem',
+    cursor: 'ns-resize',
+    touchAction: 'none',
   },
   op: {
     fontSize: '2.2rem',
@@ -216,14 +214,7 @@ const s = {
     justifyContent: 'center',
   },
 
-  /* dial */
-  dialWrapper: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '0.15rem',
-    userSelect: 'none',
-  },
+  /* dial display */
   chevron: {
     background: 'none',
     border: 'none',
@@ -241,21 +232,17 @@ const s = {
     border: '3px solid',
     background: '#fff',
     display: 'flex',
-    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    cursor: 'ns-resize',
-    touchAction: 'none',
     boxShadow: 'var(--shadow-md)',
     overflow: 'hidden',
-    position: 'relative',
+    pointerEvents: 'none',
   },
   dialValue: {
     fontSize: '2.8rem',
     fontWeight: 700,
     fontFamily: "'SF Mono', 'Fira Code', 'Consolas', monospace",
     lineHeight: 1,
-    userSelect: 'none',
   },
 
   /* dot grid (2 across) */
