@@ -4,25 +4,27 @@ const A_COLOR = '#4a6cf7'
 const B_COLOR = '#ff9500'
 const SUM_COLOR = '#34c759'
 const MAX = 20
-const KNOB_SIZE = 48
-const KNOB_RADIUS = KNOB_SIZE / 2
+
+const WHEEL_W = 28
+const WHEEL_H = 56
+const RIDGE_GAP = 6 // px between ridges
 
 function clamp(n) {
   return Math.max(0, Math.min(MAX, n))
 }
 
-/** SVG circular knob with a notch that rotates as value changes. */
-function Knob({ value, onChange, color }) {
-  const knobRef = useRef(null)
+/**
+ * Thumbwheel — like the ridged barrel on a car vent.
+ * Horizontal ridges scroll visually as you drag up/down.
+ */
+function Thumbwheel({ value, onChange, color }) {
+  const ref = useRef(null)
   const dragging = useRef(false)
   const startY = useRef(0)
   const startVal = useRef(0)
 
-  // Map value 0–MAX to rotation 0–360
-  const angle = (value / MAX) * 300 - 150 // -150 to +150 range
-  const notchAngleRad = ((angle - 90) * Math.PI) / 180
-  const notchX = KNOB_RADIUS + (KNOB_RADIUS - 8) * Math.cos(notchAngleRad)
-  const notchY = KNOB_RADIUS + (KNOB_RADIUS - 8) * Math.sin(notchAngleRad)
+  // Offset ridges so they appear to scroll with the value
+  const ridgeOffset = (value * RIDGE_GAP) % (RIDGE_GAP * 2)
 
   const onPointerDown = useCallback(
     (e) => {
@@ -31,7 +33,7 @@ function Knob({ value, onChange, color }) {
       dragging.current = true
       startY.current = e.clientY
       startVal.current = value
-      knobRef.current?.setPointerCapture(e.pointerId)
+      ref.current?.setPointerCapture(e.pointerId)
     },
     [value],
   )
@@ -40,7 +42,7 @@ function Knob({ value, onChange, color }) {
     (e) => {
       if (!dragging.current) return
       const dy = startY.current - e.clientY
-      const steps = Math.round(dy / 14)
+      const steps = Math.round(dy / 16)
       const next = clamp(startVal.current + steps)
       if (next !== value) onChange(next)
     },
@@ -49,13 +51,13 @@ function Knob({ value, onChange, color }) {
 
   const onPointerUp = useCallback((e) => {
     dragging.current = false
-    knobRef.current?.releasePointerCapture(e.pointerId)
+    ref.current?.releasePointerCapture(e.pointerId)
   }, [])
 
   /* scroll wheel */
   const scrollAccum = useRef(0)
   useEffect(() => {
-    const el = knobRef.current
+    const el = ref.current
     if (!el) return
     const handler = (e) => {
       e.preventDefault()
@@ -70,51 +72,89 @@ function Knob({ value, onChange, color }) {
     return () => el.removeEventListener('wheel', handler)
   }, [value, onChange])
 
+  // Build ridge lines
+  const ridgeCount = Math.ceil(WHEEL_H / RIDGE_GAP) + 2
+  const ridges = []
+  for (let i = 0; i < ridgeCount; i++) {
+    const y = i * RIDGE_GAP - ridgeOffset
+    if (y >= -RIDGE_GAP && y <= WHEEL_H + RIDGE_GAP) {
+      // Ridges near the center are more visible (barrel curvature effect)
+      const distFromCenter = Math.abs(y - WHEEL_H / 2) / (WHEEL_H / 2)
+      const opacity = 0.5 - distFromCenter * 0.3
+      // Ridges near edges are slightly shorter (curvature)
+      const inset = distFromCenter * 3
+      ridges.push(
+        <line
+          key={i}
+          x1={2 + inset}
+          y1={y}
+          x2={WHEEL_W - 2 - inset}
+          y2={y}
+          stroke={color}
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          opacity={Math.max(0.1, opacity)}
+        />,
+      )
+    }
+  }
+
   return (
     <svg
-      ref={knobRef}
-      width={KNOB_SIZE}
-      height={KNOB_SIZE}
-      viewBox={`0 0 ${KNOB_SIZE} ${KNOB_SIZE}`}
-      style={s.knob}
+      ref={ref}
+      width={WHEEL_W}
+      height={WHEEL_H}
+      viewBox={`0 0 ${WHEEL_W} ${WHEEL_H}`}
+      style={s.wheel}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
-      {/* outer ring */}
-      <circle
-        cx={KNOB_RADIUS}
-        cy={KNOB_RADIUS}
-        r={KNOB_RADIUS - 2}
-        fill="#f5f5f3"
-        stroke={color}
-        strokeWidth={3}
+      {/* body */}
+      <rect
+        x={0.5}
+        y={0.5}
+        width={WHEEL_W - 1}
+        height={WHEEL_H - 1}
+        rx={4}
+        ry={4}
+        fill="#f0f0ee"
+        stroke="#ccc"
+        strokeWidth={1}
       />
-      {/* grip lines */}
-      {[0, 60, 120, 180, 240, 300].map((a) => {
-        const rad = ((a + angle) * Math.PI) / 180
-        const x1 = KNOB_RADIUS + (KNOB_RADIUS - 6) * Math.cos(rad)
-        const y1 = KNOB_RADIUS + (KNOB_RADIUS - 6) * Math.sin(rad)
-        const x2 = KNOB_RADIUS + (KNOB_RADIUS - 10) * Math.cos(rad)
-        const y2 = KNOB_RADIUS + (KNOB_RADIUS - 10) * Math.sin(rad)
-        return (
-          <line
-            key={a}
-            x1={x1} y1={y1} x2={x2} y2={y2}
-            stroke="#ccc"
-            strokeWidth={1.5}
-            strokeLinecap="round"
-          />
-        )
-      })}
-      {/* notch indicator */}
-      <circle
-        cx={notchX}
-        cy={notchY}
-        r={4}
-        fill={color}
+      {/* clip ridges to the body */}
+      <clipPath id="wheelClip">
+        <rect x={1} y={1} width={WHEEL_W - 2} height={WHEEL_H - 2} rx={3} ry={3} />
+      </clipPath>
+      <g clipPath="url(#wheelClip)">{ridges}</g>
+      {/* top/bottom edge shadow for barrel depth */}
+      <rect
+        x={1}
+        y={1}
+        width={WHEEL_W - 2}
+        height={8}
+        rx={3}
+        fill="url(#topFade)"
       />
+      <rect
+        x={1}
+        y={WHEEL_H - 9}
+        width={WHEEL_W - 2}
+        height={8}
+        rx={3}
+        fill="url(#bottomFade)"
+      />
+      <defs>
+        <linearGradient id="topFade" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#e0e0de" stopOpacity={0.8} />
+          <stop offset="100%" stopColor="#e0e0de" stopOpacity={0} />
+        </linearGradient>
+        <linearGradient id="bottomFade" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#e0e0de" stopOpacity={0} />
+          <stop offset="100%" stopColor="#e0e0de" stopOpacity={0.8} />
+        </linearGradient>
+      </defs>
     </svg>
   )
 }
@@ -145,14 +185,14 @@ export default function AdditionDial() {
   return (
     <div style={s.root}>
       <div style={s.hint}>
-        Drag a dial up or down &mdash; watch the sum follow!
+        Roll a wheel up or down &mdash; watch the sum follow!
       </div>
 
       <div style={s.equation}>
         {/* first addend */}
         <div style={s.column}>
           <div style={s.numRow}>
-            <Knob value={a} onChange={setA} color={A_COLOR} />
+            <Thumbwheel value={a} onChange={setA} color={A_COLOR} />
             <div style={{ ...s.number, color: A_COLOR }}>{a}</div>
           </div>
           <DotGrid count={a} color={A_COLOR} />
@@ -163,7 +203,7 @@ export default function AdditionDial() {
         {/* second addend */}
         <div style={s.column}>
           <div style={s.numRow}>
-            <Knob value={b} onChange={setB} color={B_COLOR} />
+            <Thumbwheel value={b} onChange={setB} color={B_COLOR} />
             <div style={{ ...s.number, color: B_COLOR }}>{b}</div>
           </div>
           <DotGrid count={b} color={B_COLOR} />
@@ -183,9 +223,9 @@ export default function AdditionDial() {
       <div style={s.insight}>
         <div style={s.insightTitle}>The pattern</div>
         <p style={s.insightText}>
-          Dial either number <strong>up by 1</strong> &mdash;
+          Roll either wheel <strong>up by 1</strong> &mdash;
           the sum goes <strong>up by 1</strong>.{' '}
-          Dial it <strong>down by 1</strong> &mdash;
+          Roll it <strong>down by 1</strong> &mdash;
           the sum goes <strong>down by 1</strong>.{' '}
           They always move together!
         </p>
@@ -226,7 +266,7 @@ const s = {
   numRow: {
     display: 'flex',
     alignItems: 'center',
-    gap: '0.4rem',
+    gap: '0.5rem',
   },
   number: {
     fontSize: '2.6rem',
@@ -241,11 +281,11 @@ const s = {
     fontWeight: 400,
     color: 'var(--color-muted)',
     fontFamily: "'SF Mono', 'Fira Code', 'Consolas', monospace",
-    marginTop: 8,
+    marginTop: 12,
   },
 
-  /* knob */
-  knob: {
+  /* thumbwheel */
+  wheel: {
     cursor: 'ns-resize',
     touchAction: 'none',
     flexShrink: 0,
