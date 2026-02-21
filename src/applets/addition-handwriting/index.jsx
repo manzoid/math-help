@@ -7,9 +7,9 @@ const SUM_COLOR = '#34c759'
 const WRONG_COLOR = '#ff3b30'
 
 /* ---- generate a random addition problem ---- */
-function randomProblem(maxSum = 20) {
-  const a = Math.floor(Math.random() * maxSum) + 1
-  const b = Math.floor(Math.random() * (maxSum - a)) + 1
+function randomProblem() {
+  const a = Math.floor(Math.random() * 9) + 1   // 1-9
+  const b = 1
   return { a, b, answer: a + b }
 }
 
