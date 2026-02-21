@@ -87,12 +87,14 @@ export default function Home() {
             }}
           >
             <div style={styles.cardTitle}>{applet.title}</div>
-            <div style={styles.cardSub}>{applet.subtitle}</div>
-            <div style={styles.tags}>
-              {applet.tags.map((t) => (
-                <span key={t} style={styles.tag}>{t}</span>
-              ))}
-            </div>
+            {applet.subtitle && <div style={styles.cardSub}>{applet.subtitle}</div>}
+            {applet.tags?.length > 0 && (
+              <div style={styles.tags}>
+                {applet.tags.map((t) => (
+                  <span key={t} style={styles.tag}>{t}</span>
+                ))}
+              </div>
+            )}
           </Link>
         ))}
       </div>

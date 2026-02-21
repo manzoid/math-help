@@ -4,12 +4,11 @@ import LEVELS, { SHAPES, rotateCW, PIECE_COLORS } from './levels.js'
 /* ---- layout constants (SVG viewBox units) ---- */
 const CELL = 40
 const PAD = 20
-const TRAY_H = 120
 const TRAY_GAP = 20
 const TRAY_SCALE = 0.55
 const TAP_THRESHOLD = 5
 const DRAG_LIFT = 45 // lift drag piece above finger
-const SUM_GUTTER = 80 // space to the right of grid for the running sum
+const TRAY_ROW_H = 55 // height of one tray row
 
 /* ---- Fisher-Yates shuffle ---- */
 function shuffle(arr) {
@@ -102,9 +101,8 @@ export default function TilePuzzles() {
   /* ---- derived layout ---- */
   const gridW = level.gridWidth
   const gridH = level.gridHeight
-  const svgW = Math.max(gridW * CELL + PAD * 2 + SUM_GUTTER, 320)
+  const svgW = Math.max(gridW * CELL + PAD * 2, 280)
   const trayY = PAD + gridH * CELL + TRAY_GAP
-  const svgH = trayY + TRAY_H + PAD
 
   /* ---- SVG coord helper ---- */
   const toSVG = useCallback((cx, cy) => {
@@ -306,27 +304,33 @@ export default function TilePuzzles() {
       .sort((a, b) => a.trayOrder - b.trayOrder)
   }, [pieces, drag])
 
-  /* ---- compute tray positions ---- */
-  function getTrayPositions() {
+  /* ---- compute tray positions with wrapping ---- */
+  const trayLayout = useMemo(() => {
+    const maxW = svgW - PAD * 2
     const positions = []
-    let x = PAD
+    let x = 0
+    let row = 0
     for (const piece of trayPieces) {
       const cells = getCells(piece)
       const maxC = Math.max(...cells.map(([, c]) => c)) + 1
-      const maxR = Math.max(...cells.map(([r]) => r)) + 1
       const pw = maxC * CELL * TRAY_SCALE
-      const ph = maxR * CELL * TRAY_SCALE
+      if (x > 0 && x + pw > maxW) {
+        x = 0
+        row++
+      }
       positions.push({
         piece,
-        x,
-        y: trayY + (TRAY_H - ph) / 2,
+        x: PAD + x,
+        y: trayY + 16 + row * TRAY_ROW_H,
         w: pw,
-        h: ph,
       })
-      x += pw + 12
+      x += pw + 10
     }
-    return positions
-  }
+    const trayRows = row + 1
+    const trayH = 16 + trayRows * TRAY_ROW_H + 8
+    return { positions, trayH }
+  }, [trayPieces, svgW, trayY])
+  const svgH = trayY + trayLayout.trayH + PAD
 
   /* ---- running sum of placed squares ---- */
   const placedSum = useMemo(() => {
@@ -474,8 +478,7 @@ export default function TilePuzzles() {
   }
 
   function renderTrayPieces() {
-    const positions = getTrayPositions()
-    return positions.map(({ piece, x, y }) => {
+    return trayLayout.positions.map(({ piece, x, y }) => {
       const cells = getCells(piece)
       const isSelected = selectedId === piece.id
       return (
@@ -591,41 +594,38 @@ export default function TilePuzzles() {
   }
 
   function renderRunningSum() {
-    const sx = PAD + gridW * CELL + SUM_GUTTER / 2
-    const sy = PAD + (gridH * CELL) / 2
+    const sx = PAD + gridW * CELL - 6
+    const sy = PAD + 6
     const isFull = completed
-    const fontSize = totalArea >= 10 ? 38 : 46
+    const fontSize = 20
 
     return (
       <g style={{ pointerEvents: 'none' }}>
-        {/* sum number */}
-        <g style={isFull ? { transformOrigin: `${sx}px ${sy}px`, animation: 'sumCelebrate 0.6s ease-out' } : undefined}>
-          <text
-            x={sx} y={sy}
-            textAnchor="middle" dominantBaseline="central"
-            fontSize={fontSize} fontWeight={800}
-            fill={isFull ? '#34c759' : 'var(--color-muted, #999)'}
-            fontFamily="system-ui, sans-serif"
-          >
-            {placedSum}
-          </text>
-        </g>
-        {/* celebration ring */}
+        {/* sum badge in top-right corner of grid */}
+        <rect
+          x={sx - 28} y={sy - 12}
+          width={34} height={24}
+          rx={6}
+          fill={isFull ? '#34c759' : 'rgba(0,0,0,0.06)'}
+          opacity={isFull ? 1 : 0.8}
+        />
+        <text
+          x={sx - 11} y={sy + 1}
+          textAnchor="middle" dominantBaseline="central"
+          fontSize={fontSize} fontWeight={800}
+          fill={isFull ? '#fff' : '#bbb'}
+          fontFamily="system-ui, sans-serif"
+        >
+          {placedSum}
+        </text>
+        {/* celebration rings */}
         {isFull && (
           <>
             <circle
-              cx={sx} cy={sy}
-              r={32} fill="none"
-              stroke="#34c759" strokeWidth={3}
-              opacity={0.6}
-              style={{ animation: 'sumRing 0.8s ease-out forwards' }}
-            />
-            <circle
-              cx={sx} cy={sy}
-              r={20} fill="none"
+              cx={sx - 11} cy={sy}
+              r={18} fill="none"
               stroke="#34c759" strokeWidth={2}
-              opacity={0.4}
-              style={{ animation: 'sumRing 0.8s ease-out 0.15s forwards' }}
+              style={{ animation: 'sumRing 0.8s ease-out forwards' }}
             />
           </>
         )}
@@ -642,6 +642,45 @@ export default function TilePuzzles() {
 
   return (
     <div style={styles.root}>
+      {/* level navigation + actions */}
+      <div style={styles.controls}>
+        <button
+          onClick={() => goToLevel(Math.max(0, levelIndex - 1))}
+          disabled={levelIndex === 0}
+          style={{
+            ...styles.btn,
+            opacity: levelIndex === 0 ? 0.4 : 1,
+          }}
+        >
+          ◀ Prev
+        </button>
+
+        <span style={styles.levelLabel}>
+          Level {levelIndex + 1} of {LEVELS.length}
+          {completedLevels.has(levelIndex) ? ' ✓' : ''}
+        </span>
+
+        <button
+          onClick={() => goToLevel(Math.min(LEVELS.length - 1, levelIndex + 1))}
+          disabled={levelIndex === LEVELS.length - 1}
+          style={{
+            ...styles.btn,
+            opacity: levelIndex === LEVELS.length - 1 ? 0.4 : 1,
+          }}
+        >
+          Next ▶
+        </button>
+      </div>
+
+      <div style={styles.controls}>
+        <button onClick={resetLevel} style={styles.btnSecondary}>
+          Reset
+        </button>
+        <button onClick={showSolution} style={styles.btnSecondary}>
+          Show Solution
+        </button>
+      </div>
+
       {/* info bar */}
       <div style={styles.infoBar}>
         {pieceCount} piece{pieceCount !== 1 ? 's' : ''} — each piece has {pieceSz} square{pieceSz !== 1 ? 's' : ''}
@@ -674,7 +713,7 @@ export default function TilePuzzles() {
         {/* tray background */}
         <rect
           x={PAD - 2} y={trayY - 4}
-          width={svgW - PAD * 2 + 4} height={TRAY_H + 8}
+          width={svgW - PAD * 2 + 4} height={trayLayout.trayH + 8}
           rx={8} fill="#fafaf8" stroke="#e8e8e6" strokeWidth={1}
         />
         <text
@@ -717,45 +756,6 @@ export default function TilePuzzles() {
           `}</style>
         </defs>
       </svg>
-
-      {/* controls */}
-      <div style={styles.controls}>
-        <button
-          onClick={() => goToLevel(Math.max(0, levelIndex - 1))}
-          disabled={levelIndex === 0}
-          style={{
-            ...styles.btn,
-            opacity: levelIndex === 0 ? 0.4 : 1,
-          }}
-        >
-          ◀ Prev
-        </button>
-
-        <span style={styles.levelLabel}>
-          Level {levelIndex + 1} of {LEVELS.length}
-          {completedLevels.has(levelIndex) ? ' ✓' : ''}
-        </span>
-
-        <button
-          onClick={() => goToLevel(Math.min(LEVELS.length - 1, levelIndex + 1))}
-          disabled={levelIndex === LEVELS.length - 1}
-          style={{
-            ...styles.btn,
-            opacity: levelIndex === LEVELS.length - 1 ? 0.4 : 1,
-          }}
-        >
-          Next ▶
-        </button>
-      </div>
-
-      <div style={styles.controls}>
-        <button onClick={resetLevel} style={styles.btnSecondary}>
-          Reset
-        </button>
-        <button onClick={showSolution} style={styles.btnSecondary}>
-          Show Solution
-        </button>
-      </div>
     </div>
   )
 }

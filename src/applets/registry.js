@@ -49,8 +49,6 @@ const applets = [
   {
     slug: 'tile-puzzles',
     title: 'Tile Puzzles',
-    subtitle: 'Fill rectangular grids with puzzle pieces',
-    tags: ['multiplication', 'spatial', 'ages 4-6'],
     component: lazy(() => import('./tile-puzzles/index.jsx')),
   },
 ]
