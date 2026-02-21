@@ -597,45 +597,6 @@ export default function TilePuzzles() {
     )
   }
 
-  function renderRunningSum() {
-    const sx = PAD + gridW * CELL - 6
-    const sy = PAD + 6
-    const isFull = completed
-    const fontSize = 20
-
-    return (
-      <g style={{ pointerEvents: 'none' }}>
-        {/* sum badge in top-right corner of grid */}
-        <rect
-          x={sx - 28} y={sy - 12}
-          width={34} height={24}
-          rx={6}
-          fill={isFull ? '#34c759' : 'rgba(0,0,0,0.06)'}
-          opacity={isFull ? 1 : 0.8}
-        />
-        <text
-          x={sx - 11} y={sy + 1}
-          textAnchor="middle" dominantBaseline="central"
-          fontSize={fontSize} fontWeight={800}
-          fill={isFull ? '#fff' : '#bbb'}
-          fontFamily="system-ui, sans-serif"
-        >
-          {placedSum}
-        </text>
-        {/* celebration rings */}
-        {isFull && (
-          <>
-            <circle
-              cx={sx - 11} cy={sy}
-              r={18} fill="none"
-              stroke="#34c759" strokeWidth={2}
-              style={{ animation: 'sumRing 0.8s ease-out forwards' }}
-            />
-          </>
-        )}
-      </g>
-    )
-  }
 
   /* ============================================================== */
   /*  JSX                                                            */
@@ -682,6 +643,16 @@ export default function TilePuzzles() {
         </button>
       </div>
 
+      {/* running sum */}
+      <div style={styles.sumBar}>
+        <span style={{
+          ...styles.sumText,
+          color: completed ? '#34c759' : '#bbb',
+        }}>
+          {placedSum} / {totalArea}
+        </span>
+      </div>
+
       {/* SVG canvas */}
       <svg
         ref={svgRef}
@@ -701,10 +672,6 @@ export default function TilePuzzles() {
         {renderGrid()}
         {renderPieceOutlines()}
         {renderGridNumbers()}
-
-        {/* running sum */}
-        {renderRunningSum()}
-
 
         {/* tray background */}
         <rect
@@ -739,17 +706,6 @@ export default function TilePuzzles() {
             <stop offset="55%" stopColor="#000" stopOpacity="0.0" />
             <stop offset="100%" stopColor="#000" stopOpacity="0.25" />
           </linearGradient>
-          <style>{`
-            @keyframes sumCelebrate {
-              0% { transform: scale(1); }
-              40% { transform: scale(1.35); }
-              100% { transform: scale(1); }
-            }
-            @keyframes sumRing {
-              0% { r: 10; opacity: 0.7; stroke-width: 4; }
-              100% { r: 44; opacity: 0; stroke-width: 1; }
-            }
-          `}</style>
         </defs>
       </svg>
     </div>
@@ -770,6 +726,16 @@ const styles = {
     margin: '0 auto 0.5rem',
     touchAction: 'none',
     cursor: 'default',
+  },
+  sumBar: {
+    textAlign: 'center',
+    marginBottom: '0.25rem',
+  },
+  sumText: {
+    fontSize: '1.1rem',
+    fontWeight: 700,
+    fontFamily: 'system-ui, sans-serif',
+    transition: 'color 0.3s',
   },
   controls: {
     display: 'flex',
