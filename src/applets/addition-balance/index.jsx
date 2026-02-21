@@ -219,8 +219,10 @@ export default function AdditionBalance() {
 
       if (tray) {
         addToTray(tray)
+      } else if (hitSupply(p.y)) {
+        // Dropped on supply area — weight returns to supply (removed from tray)
       } else if (dragging.source !== 'supply') {
-        // Dropped outside any tray — put it back where it came from
+        // Dropped in empty space — snap back to source tray
         addToTray(dragging.source)
       }
 
@@ -244,7 +246,7 @@ export default function AdditionBalance() {
     <div style={s.root}>
       <div style={s.hint}>
         Drag weights from the supply onto any tray, or between trays.
-        Drag a weight off a tray to remove it.
+        Drag a weight back to the supply to remove it.
       </div>
 
       {/* Big equation */}
