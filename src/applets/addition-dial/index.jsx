@@ -445,6 +445,7 @@ const s = {
     flexDirection: 'column',
     alignItems: 'center',
     gap: '0.6rem',
+    minWidth: 110,
   },
   numRow: {
     display: 'flex',
@@ -456,7 +457,7 @@ const s = {
     fontWeight: 700,
     fontFamily: "'SF Mono', 'Fira Code', 'Consolas', monospace",
     lineHeight: 1,
-    minWidth: 40,
+    minWidth: '2.5ch',
     textAlign: 'center',
   },
   op: {
