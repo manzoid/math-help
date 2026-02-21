@@ -328,6 +328,7 @@ export default function TilePuzzles() {
     const piece = piecesRef.current.find(pp => pp.id === pieceId)
 
     resetGesture()
+    rotAnimRef.current = { key: 0, fromDeg: 0 }
     dragStart.current = { x: p.x, y: p.y, pieceId, moved: false }
 
     setDrag({
@@ -353,6 +354,7 @@ export default function TilePuzzles() {
     removePiece(pieceId)
 
     resetGesture()
+    rotAnimRef.current = { key: 0, fromDeg: 0 }
     dragStart.current = { x: p.x, y: p.y, pieceId, moved: false }
 
     setDrag({
