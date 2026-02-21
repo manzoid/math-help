@@ -353,7 +353,6 @@ export default function TilePuzzles() {
   const placedSum = useMemo(() => {
     return pieces.filter(p => p.placed).length * level.pieceSize
   }, [pieces, level.pieceSize])
-  const totalArea = gridW * gridH
 
   /* ---- find the rightmost (then bottommost) cell for number label ---- */
   function labelCell(cells) {
@@ -617,6 +616,13 @@ export default function TilePuzzles() {
 
   return (
     <div style={styles.root}>
+      <style>{`
+        @keyframes sumPop {
+          0% { transform: scale(1); }
+          40% { transform: scale(1.3); }
+          100% { transform: scale(1); }
+        }
+      `}</style>
       {/* level navigation + actions */}
       <div style={styles.controls}>
         <button
@@ -657,11 +663,15 @@ export default function TilePuzzles() {
 
       {/* running sum */}
       <div style={styles.sumBar}>
-        <span style={{
-          ...styles.sumText,
-          color: completed ? '#34c759' : '#bbb',
-        }}>
-          {placedSum} / {totalArea}
+        <span
+          key={completed ? 'done' : 'wip'}
+          style={{
+            ...styles.sumText,
+            color: completed ? '#34c759' : '#ccc',
+            animation: completed ? 'sumPop 0.4s ease-out' : 'none',
+          }}
+        >
+          {placedSum}
         </span>
       </div>
 
@@ -741,13 +751,14 @@ const styles = {
   },
   sumBar: {
     textAlign: 'center',
-    marginBottom: '0.25rem',
+    margin: '-0.25rem 0 0.25rem',
   },
   sumText: {
-    fontSize: '1.1rem',
-    fontWeight: 700,
+    fontSize: '3rem',
+    fontWeight: 800,
     fontFamily: 'system-ui, sans-serif',
     transition: 'color 0.3s',
+    lineHeight: 1,
   },
   controls: {
     display: 'flex',
