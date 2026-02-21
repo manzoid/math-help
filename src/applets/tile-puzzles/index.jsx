@@ -528,19 +528,23 @@ export default function TilePuzzles() {
               strokeDasharray="6 3"
             />
           )}
-          {cells.map(([r, c], i) => (
-            <rect
-              key={i}
-              x={x + c * CELL * TRAY_SCALE + 1}
-              y={y + r * CELL * TRAY_SCALE + 1}
-              width={CELL * TRAY_SCALE - 2}
-              height={CELL * TRAY_SCALE - 2}
-              rx={3}
-              fill={piece.color}
-              stroke="#fff"
-              strokeWidth={1.5}
-            />
-          ))}
+          {cells.map(([r, c], i) => {
+            const S = CELL * TRAY_SCALE
+            const bx = x + c * S + 0.5
+            const by = y + r * S + 0.5
+            const bw = S - 1
+            const bh = S - 1
+            return (
+              <g key={i}>
+                <rect x={bx} y={by} width={bw} height={bh} rx={2}
+                  fill={piece.color} />
+                <rect x={bx} y={by} width={bw} height={bh} rx={2}
+                  fill="url(#cellBevel)" />
+                <rect x={bx} y={by} width={bw} height={bh} rx={2}
+                  fill="none" stroke="rgba(0,0,0,0.15)" strokeWidth={0.75} />
+              </g>
+            )
+          })}
           {(() => {
             const [lr, lc] = labelCell(cells)
             return (
@@ -598,21 +602,21 @@ export default function TilePuzzles() {
     const cy = ((maxR - minR + 1) * CELL) / 2
 
     return (
-      <g style={{ pointerEvents: 'none' }}>
-        {cells.map(([r, c], i) => (
-          <rect
-            key={`drag-${i}`}
-            x={drag.svgX + (c - minC) * CELL - cx + 1}
-            y={drag.svgY + (r - minR) * CELL - cy + 1}
-            width={CELL - 2}
-            height={CELL - 2}
-            rx={4}
-            fill={piece.color}
-            stroke="#fff"
-            strokeWidth={2}
-            opacity={0.8}
-          />
-        ))}
+      <g style={{ pointerEvents: 'none' }} opacity={0.85}>
+        {cells.map(([r, c], i) => {
+          const dx = drag.svgX + (c - minC) * CELL - cx + 0.5
+          const dy = drag.svgY + (r - minR) * CELL - cy + 0.5
+          return (
+            <g key={`drag-${i}`}>
+              <rect x={dx} y={dy} width={CELL - 1} height={CELL - 1}
+                rx={3} fill={piece.color} />
+              <rect x={dx} y={dy} width={CELL - 1} height={CELL - 1}
+                rx={3} fill="url(#cellBevel)" />
+              <rect x={dx} y={dy} width={CELL - 1} height={CELL - 1}
+                rx={3} fill="none" stroke="rgba(0,0,0,0.15)" strokeWidth={1} />
+            </g>
+          )
+        })}
       </g>
     )
   }
