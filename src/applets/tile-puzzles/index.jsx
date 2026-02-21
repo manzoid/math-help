@@ -8,6 +8,7 @@ const TRAY_H = 120
 const TRAY_GAP = 20
 const TRAY_SCALE = 0.55
 const TAP_THRESHOLD = 5
+const DRAG_LIFT = 55 // lift drag piece above finger
 
 /* ---- Fisher-Yates shuffle ---- */
 function shuffle(arr) {
@@ -132,11 +133,13 @@ export default function TilePuzzles() {
   }
 
   /* ---- snap SVG position to grid cell ---- */
+  /* svgX/svgY is the center of the piece bounding box (after lift),
+     so we offset by half the piece dimensions to find where cell [0,0] lands */
   function snapToGrid(svgX, svgY, cells) {
-    const minR = Math.min(...cells.map(([r]) => r))
-    const minC = Math.min(...cells.map(([, c]) => c))
-    const row = Math.round((svgY - PAD) / CELL - minR)
-    const col = Math.round((svgX - PAD) / CELL - minC)
+    const maxR = Math.max(...cells.map(([r]) => r))
+    const maxC = Math.max(...cells.map(([, c]) => c))
+    const row = Math.round((svgY - PAD) / CELL - (maxR + 1) / 2)
+    const col = Math.round((svgX - PAD) / CELL - (maxC + 1) / 2)
     return { row, col }
   }
 
@@ -279,13 +282,14 @@ export default function TilePuzzles() {
     const piece = piecesRef.current.find(pp => pp.id === dragStart.current.pieceId)
     if (!piece) return
     const cells = getCells(piece)
-    const snap = snapToGrid(p.x, p.y, cells)
+    const liftedY = p.y - DRAG_LIFT
+    const snap = snapToGrid(p.x, liftedY, cells)
     const valid = canPlace(gridRef.current, cells, snap.row, snap.col, gridW, gridH, null)
 
     setDrag({
       pieceId: dragStart.current.pieceId,
       svgX: p.x,
-      svgY: p.y,
+      svgY: liftedY,
       snapRow: valid ? snap.row : null,
       snapCol: valid ? snap.col : null,
     })
