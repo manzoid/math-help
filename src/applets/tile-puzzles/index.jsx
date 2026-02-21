@@ -356,9 +356,9 @@ export default function TilePuzzles() {
   /* ---- tray layout for unplaced pieces ---- */
   const trayPieces = useMemo(() => {
     return pieces
-      .filter(p => !p.placed && !(drag?.pieceId === p.id && dragStart.current?.moved))
+      .filter(p => !p.placed)
       .sort((a, b) => a.trayOrder - b.trayOrder)
-  }, [pieces, drag])
+  }, [pieces])
 
   /* ---- compute tray positions with wrapping ---- */
   const trayLayout = useMemo(() => {
@@ -568,10 +568,12 @@ export default function TilePuzzles() {
     return trayLayout.positions.map(({ piece, x, y }) => {
       const cells = getCells(piece)
       const isSelected = selectedId === piece.id
+      const isDragging = drag?.pieceId === piece.id && dragStart.current?.moved
       return (
         <g key={piece.id}
-          onPointerDown={(e) => onTrayPieceDown(e, piece.id)}
+          onPointerDown={(e) => !isDragging && onTrayPieceDown(e, piece.id)}
           style={{ cursor: 'grab' }}
+          opacity={isDragging ? 0.2 : 1}
         >
           {isSelected && (
             <rect
