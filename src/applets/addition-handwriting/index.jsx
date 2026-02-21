@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
+import * as tf from '@tensorflow/tfjs'
 
 const A_COLOR   = '#4a6cf7'
 const B_COLOR   = '#ff9500'
@@ -12,77 +13,211 @@ function randomProblem(maxSum = 20) {
   return { a, b, answer: a + b }
 }
 
-/* ---- check Chrome Handwriting Recognition API ---- */
-function hasHandwritingAPI() {
-  return 'createHandwritingRecognizer' in navigator
+/* ---- image preprocessing helpers ---- */
+
+/** Get the bounding box of drawn content (non-white pixels). */
+function getBoundingBox(imageData) {
+  const { data, width, height } = imageData
+  let top = height, left = width, bottom = 0, right = 0
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4
+      // check alpha channel — any drawn pixel has alpha > 0
+      if (data[i + 3] > 20) {
+        if (y < top) top = y
+        if (y > bottom) bottom = y
+        if (x < left) left = x
+        if (x > right) right = x
+      }
+    }
+  }
+  if (top > bottom) return null // nothing drawn
+  return { top, left, bottom: bottom + 1, right: right + 1 }
+}
+
+/**
+ * Segment digits by finding vertical gaps in drawn content.
+ * Returns an array of { left, right } column ranges.
+ */
+function segmentDigits(imageData, bbox) {
+  const { data, width } = imageData
+  const colHasInk = []
+  for (let x = bbox.left; x < bbox.right; x++) {
+    let hasInk = false
+    for (let y = bbox.top; y < bbox.bottom; y++) {
+      if (data[((y * width) + x) * 4 + 3] > 20) { hasInk = true; break }
+    }
+    colHasInk.push(hasInk)
+  }
+
+  // find contiguous regions of ink
+  const regions = []
+  let inRegion = false
+  let start = 0
+  for (let i = 0; i <= colHasInk.length; i++) {
+    if (i < colHasInk.length && colHasInk[i]) {
+      if (!inRegion) { start = i; inRegion = true }
+    } else {
+      if (inRegion) {
+        regions.push({ left: bbox.left + start, right: bbox.left + i })
+        inRegion = false
+      }
+    }
+  }
+
+  // merge regions that are very close (gap < 8px is probably same digit)
+  const merged = [regions[0]]
+  for (let i = 1; i < regions.length; i++) {
+    const prev = merged[merged.length - 1]
+    if (regions[i].left - prev.right < 8) {
+      prev.right = regions[i].right
+    } else {
+      merged.push(regions[i])
+    }
+  }
+  return merged
+}
+
+/**
+ * Extract a single digit region from the canvas and return a 28×28 tensor.
+ * MNIST expects white-on-black, centered, with padding.
+ */
+function extractDigitTensor(imageData, bbox, colRegion) {
+  const { data, width } = imageData
+  const dLeft = colRegion.left
+  const dRight = colRegion.right
+  const dTop = bbox.top
+  const dBottom = bbox.bottom
+  const dw = dRight - dLeft
+  const dh = dBottom - dTop
+
+  // create a square crop with padding
+  const size = Math.max(dw, dh)
+  const pad = Math.round(size * 0.3) // add ~30% padding like MNIST
+  const totalSize = size + pad * 2
+
+  // draw into a temporary canvas, centered
+  const tmp = document.createElement('canvas')
+  tmp.width = totalSize
+  tmp.height = totalSize
+  const tctx = tmp.getContext('2d')
+
+  // fill black background (MNIST style)
+  tctx.fillStyle = '#000'
+  tctx.fillRect(0, 0, totalSize, totalSize)
+
+  // draw the digit region, centered
+  const offX = pad + Math.round((size - dw) / 2)
+  const offY = pad + Math.round((size - dh) / 2)
+
+  // copy pixel by pixel, inverting: drawn pixels become white
+  const tmpData = tctx.getImageData(0, 0, totalSize, totalSize)
+  for (let y = dTop; y < dBottom; y++) {
+    for (let x = dLeft; x < dRight; x++) {
+      const srcIdx = (y * width + x) * 4
+      const alpha = data[srcIdx + 3]
+      if (alpha > 20) {
+        const dx = offX + (x - dLeft)
+        const dy = offY + (y - dTop)
+        const dstIdx = (dy * totalSize + dx) * 4
+        tmpData.data[dstIdx] = 255     // R
+        tmpData.data[dstIdx + 1] = 255 // G
+        tmpData.data[dstIdx + 2] = 255 // B
+        tmpData.data[dstIdx + 3] = 255 // A
+      }
+    }
+  }
+  tctx.putImageData(tmpData, 0, 0)
+
+  // resize to 28×28
+  const out = document.createElement('canvas')
+  out.width = 28
+  out.height = 28
+  const octx = out.getContext('2d')
+  octx.imageSmoothingEnabled = true
+  octx.imageSmoothingQuality = 'high'
+  octx.drawImage(tmp, 0, 0, 28, 28)
+
+  // convert to grayscale float tensor [1, 28, 28, 1], normalized 0-1
+  const pixels = octx.getImageData(0, 0, 28, 28)
+  const floats = new Float32Array(784)
+  for (let i = 0; i < 784; i++) {
+    // use red channel (all channels are same since we drew white on black)
+    floats[i] = pixels.data[i * 4] / 255
+  }
+  return tf.tensor4d(floats, [1, 28, 28, 1])
 }
 
 /* ================================================================ */
 
 export default function AdditionHandwriting() {
   const canvasRef = useRef(null)
-  const recognizerRef = useRef(null)
-  const drawingRef = useRef(null)
-  const strokeRef = useRef(null)
-  const strokeStartRef = useRef(0)
+  const modelRef = useRef(null)
 
   const [problem, setProblem] = useState(() => randomProblem())
-  const [apiReady, setApiReady] = useState(false)
-  const [apiError, setApiError] = useState(null)
-  const [recognized, setRecognized] = useState(null)   // string or null
-  const [result, setResult] = useState(null)            // 'correct' | 'wrong' | null
-  const [drawing, setDrawing] = useState(false)         // is the user currently drawing?
+  const [modelReady, setModelReady] = useState(false)
+  const [modelError, setModelError] = useState(null)
+  const [recognized, setRecognized] = useState(null)
+  const [result, setResult] = useState(null)
+  const [drawing, setDrawing] = useState(false)
   const [hasStrokes, setHasStrokes] = useState(false)
 
-  /* ---- init recognizer ---- */
+  /* ---- load TF.js model ---- */
   useEffect(() => {
-    if (!hasHandwritingAPI()) {
-      setApiError('Handwriting Recognition API not available. Use Chrome 99+ on a Chromebook, Android, or desktop.')
-      return
-    }
-
     let cancelled = false
     ;(async () => {
       try {
-        const rec = await navigator.createHandwritingRecognizer({ languages: ['en'] })
-        if (cancelled) { rec.finish(); return }
-        recognizerRef.current = rec
-        setApiReady(true)
+        const model = await tf.loadLayersModel('/mnist-model/model.json')
+        if (cancelled) return
+        modelRef.current = model
+        setModelReady(true)
       } catch (e) {
-        setApiError(`Could not create recognizer: ${e.message}`)
+        if (!cancelled) setModelError(`Could not load digit model: ${e.message}`)
       }
     })()
+    return () => { cancelled = true }
+  }, [])
 
-    return () => {
-      cancelled = true
-      recognizerRef.current?.finish()
-      recognizerRef.current = null
+  /* ---- recognize digits from canvas ---- */
+  const recognizeCanvas = useCallback(() => {
+    const canvas = canvasRef.current
+    const model = modelRef.current
+    if (!canvas || !model) return
+
+    const ctx = canvas.getContext('2d')
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    const bbox = getBoundingBox(imageData)
+    if (!bbox) return
+
+    const regions = segmentDigits(imageData, bbox)
+    if (!regions || regions.length === 0) return
+
+    // recognize each digit region
+    const digits = []
+    for (const region of regions) {
+      const tensor = extractDigitTensor(imageData, bbox, region)
+      const pred = model.predict(tensor)
+      const digitIdx = pred.argMax(1).dataSync()[0]
+      digits.push(digitIdx)
+      tensor.dispose()
+      pred.dispose()
     }
+
+    // combine digits into a number
+    const number = digits.reduce((acc, d) => acc * 10 + d, 0)
+    setRecognized(String(number))
   }, [])
 
-  /* ---- start a fresh drawing session ---- */
-  const startSession = useCallback(() => {
-    drawingRef.current?.clear()
-    const rec = recognizerRef.current
-    if (!rec) return
-    drawingRef.current = rec.startDrawing({
-      recognitionType: 'number',
-      inputType: 'touch',
-      alternatives: 3,
-    })
-  }, [])
-
-  /* ---- clear canvas + session ---- */
+  /* ---- clear canvas ---- */
   const clearCanvas = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-    startSession()
     setRecognized(null)
     setResult(null)
     setHasStrokes(false)
-  }, [startSession])
+  }, [])
 
   /* ---- next problem ---- */
   const nextProblem = useCallback(() => {
@@ -90,14 +225,12 @@ export default function AdditionHandwriting() {
     setRecognized(null)
     setResult(null)
     setHasStrokes(false)
-    // clear canvas
     const canvas = canvasRef.current
     if (canvas) {
       const ctx = canvas.getContext('2d')
       ctx.clearRect(0, 0, canvas.width, canvas.height)
     }
-    startSession()
-  }, [startSession])
+  }, [])
 
   /* ---- set up canvas size ---- */
   useEffect(() => {
@@ -115,67 +248,58 @@ export default function AdditionHandwriting() {
     ctx.strokeStyle = '#333'
   }, [])
 
-  /* ---- start drawing session once API is ready ---- */
-  useEffect(() => {
-    if (apiReady) startSession()
-  }, [apiReady, startSession])
-
   /* ---- pointer handlers for drawing ---- */
   const onPointerDown = useCallback((e) => {
-    if (!apiReady || result) return
+    if (!modelReady || result) return
     const canvas = canvasRef.current
     canvas.setPointerCapture(e.pointerId)
     setDrawing(true)
 
-    const stroke = new HandwritingStroke()
-    strokeRef.current = stroke
-    strokeStartRef.current = Date.now()
-
     const rect = canvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
-    stroke.addPoint({ x, y, t: 0 })
+    const pr = window.devicePixelRatio || 1
+    const x = (e.clientX - rect.left)
+    const y = (e.clientY - rect.top)
 
     const ctx = canvas.getContext('2d')
+    ctx.lineWidth = 6
+    ctx.strokeStyle = '#333'
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
     ctx.beginPath()
-    ctx.moveTo(x, y)
-  }, [apiReady, result])
+    ctx.moveTo(x * pr, y * pr)
+  }, [modelReady, result])
 
   const onPointerMove = useCallback((e) => {
-    if (!drawing || !strokeRef.current) return
+    if (!drawing) return
     const canvas = canvasRef.current
     const rect = canvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
-
-    strokeRef.current.addPoint({ x, y, t: Date.now() - strokeStartRef.current })
+    const pr = window.devicePixelRatio || 1
+    const x = (e.clientX - rect.left)
+    const y = (e.clientY - rect.top)
 
     const ctx = canvas.getContext('2d')
-    ctx.lineTo(x, y)
+    ctx.lineTo(x * pr, y * pr)
     ctx.stroke()
+    ctx.beginPath()
+    ctx.moveTo(x * pr, y * pr)
   }, [drawing])
 
-  const onPointerUp = useCallback(async () => {
-    if (!drawing || !strokeRef.current) return
+  const onPointerUp = useCallback(() => {
+    if (!drawing) return
     setDrawing(false)
     setHasStrokes(true)
-
-    const dw = drawingRef.current
-    if (dw && strokeRef.current) {
-      dw.addStroke(strokeRef.current)
-      strokeRef.current = null
-
-      // get prediction after each stroke
-      try {
-        const predictions = await dw.getPrediction()
-        if (predictions && predictions.length > 0) {
-          setRecognized(predictions[0].text)
-        }
-      } catch {
-        // recognition can fail transiently, ignore
-      }
-    }
   }, [drawing])
+
+  /* ---- auto-recognize after stroke ends (debounced) ---- */
+  const recognizeTimerRef = useRef(null)
+  useEffect(() => {
+    if (!hasStrokes || drawing || result) return
+    clearTimeout(recognizeTimerRef.current)
+    recognizeTimerRef.current = setTimeout(() => {
+      recognizeCanvas()
+    }, 400)
+    return () => clearTimeout(recognizeTimerRef.current)
+  }, [hasStrokes, drawing, result, recognizeCanvas])
 
   /* ---- check answer ---- */
   const checkAnswer = useCallback(() => {
@@ -208,15 +332,18 @@ export default function AdditionHandwriting() {
         Write your answer on the pad below
       </p>
 
-      {/* API error fallback */}
-      {apiError && (
-        <div style={s.errorBox}>
-          {apiError}
-        </div>
+      {/* model loading state */}
+      {!modelReady && !modelError && (
+        <div style={s.loadingBox}>Loading digit recognizer...</div>
+      )}
+
+      {/* model error */}
+      {modelError && (
+        <div style={s.errorBox}>{modelError}</div>
       )}
 
       {/* drawing canvas */}
-      {!apiError && (
+      {modelReady && (
         <>
           <div style={{
             ...s.canvasWrap,
@@ -300,9 +427,9 @@ export default function AdditionHandwriting() {
       <div style={s.insight}>
         <div style={s.insightTitle}>How it works</div>
         <p style={s.insightText}>
-          Write your answer with your finger or stylus. The browser recognizes
-          your handwriting right on your device — no internet needed!
-          This uses the Chrome Handwriting Recognition API.
+          Write your answer with your finger or stylus. A small neural network
+          running right in your browser recognizes the digits — no internet
+          needed, and it works on any device!
         </p>
       </div>
     </div>
@@ -337,6 +464,12 @@ const s = {
     fontSize: '0.9rem',
     color: 'var(--color-muted)',
     margin: '0 0 0.75rem',
+  },
+  loadingBox: {
+    textAlign: 'center',
+    padding: '1rem',
+    fontSize: '0.9rem',
+    color: 'var(--color-muted)',
   },
   errorBox: {
     background: 'rgba(255,59,48,0.08)',
