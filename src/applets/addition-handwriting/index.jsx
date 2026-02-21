@@ -7,11 +7,14 @@ const SUM_COLOR = '#34c759'
 const WRONG_COLOR = '#ff3b30'
 
 /* ---- generate a random addition problem ---- */
-function randomProblem() {
-  const a = Math.floor(Math.random() * 9) + 1   // 1-9
-  const b = 1
+function randomProblem(maxSum = 20) {
+  const a = Math.floor(Math.random() * maxSum) + 1
+  const b = Math.floor(Math.random() * (maxSum - a)) + 1
   return { a, b, answer: a + b }
 }
+
+const FIRST_PROBLEM = { a: Math.floor(Math.random() * 9) + 1, b: 1 }
+FIRST_PROBLEM.answer = FIRST_PROBLEM.a + FIRST_PROBLEM.b
 
 /* ---- image preprocessing helpers ---- */
 
@@ -154,7 +157,7 @@ export default function AdditionHandwriting() {
   const canvasRef = useRef(null)
   const modelRef = useRef(null)
 
-  const [problem, setProblem] = useState(() => randomProblem())
+  const [problem, setProblem] = useState(FIRST_PROBLEM)
   const [modelReady, setModelReady] = useState(false)
   const [modelError, setModelError] = useState(null)
   const [recognized, setRecognized] = useState(null)
