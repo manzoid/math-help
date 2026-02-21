@@ -47,14 +47,20 @@ function Dial({ value, onChange, color }) {
     ref.current?.releasePointerCapture(e.pointerId)
   }, [])
 
-  /* ---- scroll wheel ---- */
+  /* ---- scroll wheel (throttled) ---- */
+  const scrollAccum = useRef(0)
   useEffect(() => {
     const el = ref.current
     if (!el) return
     const handler = (e) => {
       e.preventDefault()
-      const dir = e.deltaY < 0 ? 1 : -1
-      onChange(clamp(value + dir))
+      scrollAccum.current += e.deltaY
+      const threshold = 80
+      if (Math.abs(scrollAccum.current) >= threshold) {
+        const dir = scrollAccum.current < 0 ? 1 : -1
+        onChange(clamp(value + dir))
+        scrollAccum.current = 0
+      }
     }
     el.addEventListener('wheel', handler, { passive: false })
     return () => el.removeEventListener('wheel', handler)
@@ -116,7 +122,7 @@ export default function AdditionDial() {
   const sum = a + b
 
   return (
-    <div>
+    <div style={s.root}>
       <div style={s.hint}>
         Drag a number up or down &mdash; watch the sum follow!
       </div>
@@ -164,6 +170,10 @@ export default function AdditionDial() {
 /* ——— styles ——— */
 
 const s = {
+  root: {
+    userSelect: 'none',
+    WebkitUserSelect: 'none',
+  },
   hint: {
     textAlign: 'center',
     color: 'var(--color-muted)',
