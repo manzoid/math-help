@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useCallback } from 'react'
+import { useState, useRef, useMemo, useCallback, useEffect } from 'react'
 import LEVELS, { SHAPES, rotateCW, PIECE_COLORS } from './levels.js'
 
 /* ---- layout constants (SVG viewBox units) ---- */
@@ -14,6 +14,29 @@ const TRAY_ROW_H = 55 // height of one tray row
 const MAX_GRID_W = Math.max(...LEVELS.map(l => l.gridWidth))
 const SUM_GUTTER = 70 // space to the right of the grid for the big sum
 const STABLE_SVG_W = MAX_GRID_W * CELL + PAD * 2 + SUM_GUTTER
+
+/* ---- confetti config ---- */
+const CONFETTI_COLORS = ['#ff1744','#2962ff','#00c853','#aa00ff','#ff8800','#ffd600','#00bfa5','#ff4081']
+const CONFETTI_COUNT = 50
+
+function makeConfetti() {
+  return Array.from({ length: CONFETTI_COUNT }, (_, i) => {
+    const angle = (Math.random() * 360) * Math.PI / 180
+    const dist = 80 + Math.random() * 220
+    const size = 6 + Math.random() * 8
+    return {
+      id: i,
+      color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+      x: Math.cos(angle) * dist,
+      y: Math.sin(angle) * dist - 40, // bias upward
+      size,
+      rot: Math.random() * 720 - 360,
+      dur: 0.7 + Math.random() * 0.8,
+      delay: Math.random() * 0.15,
+      shape: Math.random() > 0.5 ? 'rect' : 'circle',
+    }
+  })
+}
 
 /* ---- Fisher-Yates shuffle ---- */
 function shuffle(arr) {
@@ -101,7 +124,17 @@ export default function TilePuzzles() {
   const dragRef = useRef(null)
   const setDrag = (v) => { dragRef.current = v; _setDrag(v) }
   const [completed, setCompleted] = useState(false)
+  const [confetti, setConfetti] = useState(null)
   const dragStart = useRef(null)
+
+  // trigger confetti on completion
+  useEffect(() => {
+    if (completed && !confetti) {
+      setConfetti(makeConfetti())
+      const timer = setTimeout(() => setConfetti(null), 2000)
+      return () => clearTimeout(timer)
+    }
+  }, [completed])
 
   /* ---- derived layout ---- */
   const gridW = level.gridWidth
@@ -171,6 +204,7 @@ export default function TilePuzzles() {
       if (!piece || !piece.placed) return prevPieces
       setGrid(prevGrid => prevGrid.map(r => r.map(c => c === pieceId ? null : c)))
       setCompleted(false)
+      setConfetti(null)
       return prevPieces.map(p =>
         p.id === pieceId ? { ...p, placed: false } : p
       )
@@ -200,6 +234,7 @@ export default function TilePuzzles() {
     }
     setSelectedId(null)
     setDrag(null)
+    setConfetti(null)
   }
 
   function resetLevel() {
@@ -209,6 +244,7 @@ export default function TilePuzzles() {
     setSelectedId(null)
     setDrag(null)
     setCompleted(false)
+    setConfetti(null)
   }
 
   /* ---- show solution ---- */
@@ -754,6 +790,37 @@ export default function TilePuzzles() {
           `}</style>
         </defs>
       </svg>
+
+      {/* confetti celebration overlay */}
+      {confetti && (
+        <div style={styles.confettiWrap}>
+          <style>{`
+            @keyframes confettiBurst {
+              0% { transform: translate(0,0) rotate(0deg) scale(1); opacity: 1; }
+              100% { transform: translate(var(--cx), var(--cy)) rotate(var(--cr)) scale(0.3); opacity: 0; }
+            }
+          `}</style>
+          {confetti.map(p => (
+            <div
+              key={p.id}
+              style={{
+                position: 'absolute',
+                left: '50%',
+                top: '35%',
+                width: p.shape === 'rect' ? p.size : p.size * 0.8,
+                height: p.shape === 'rect' ? p.size * 0.6 : p.size * 0.8,
+                borderRadius: p.shape === 'circle' ? '50%' : '2px',
+                background: p.color,
+                '--cx': `${p.x}px`,
+                '--cy': `${p.y}px`,
+                '--cr': `${p.rot}deg`,
+                animation: `confettiBurst ${p.dur}s ${p.delay}s ease-out forwards`,
+                pointerEvents: 'none',
+              }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -764,6 +831,14 @@ const styles = {
   root: {
     userSelect: 'none',
     WebkitUserSelect: 'none',
+    position: 'relative',
+  },
+  confettiWrap: {
+    position: 'absolute',
+    inset: 0,
+    overflow: 'hidden',
+    pointerEvents: 'none',
+    zIndex: 10,
   },
   svg: {
     width: '100%',
