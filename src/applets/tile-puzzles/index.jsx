@@ -897,6 +897,7 @@ const styles = {
     margin: '0 auto 0.5rem',
     touchAction: 'none',
     cursor: 'default',
+    overflow: 'visible',
   },
   controls: {
     display: 'flex',
