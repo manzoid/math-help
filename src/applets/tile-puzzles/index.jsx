@@ -13,7 +13,7 @@ const TRAY_ROW_H = 55 // height of one tray row
 /* stable SVG width across all levels so layout never shifts */
 const MAX_GRID_W = Math.max(...LEVELS.map(l => l.gridWidth))
 const SUM_GUTTER = 70 // space to the right of the grid for the big sum
-const STABLE_SVG_W = MAX_GRID_W * CELL + PAD * 2 + SUM_GUTTER
+const STABLE_SVG_W = MAX_GRID_W * CELL + SUM_GUTTER * 2
 
 /* ---- confetti config ---- */
 const CONFETTI_COLORS = ['#ff1744','#2962ff','#00c853','#aa00ff','#ff8800','#ffd600','#00bfa5','#ff4081']
@@ -180,8 +180,8 @@ export default function TilePuzzles() {
   const gridW = level.gridWidth
   const gridH = level.gridHeight
   const svgW = STABLE_SVG_W
-  // center the grid + sum gutter horizontally
-  const gridX = (svgW - (gridW * CELL + SUM_GUTTER)) / 2
+  // center the grid itself horizontally (sum floats to its right)
+  const gridX = (svgW - gridW * CELL) / 2
   const trayY = PAD + gridH * CELL + TRAY_GAP
 
   /* ---- SVG coord helper ---- */
@@ -906,8 +906,6 @@ const styles = {
     marginBottom: '0.5rem',
     maxWidth: 600,
     margin: '0 auto 0.5rem',
-    paddingRight: `${(SUM_GUTTER / STABLE_SVG_W) * 100}%`,
-    boxSizing: 'border-box',
   },
   levelLabel: {
     fontSize: '0.9rem',
