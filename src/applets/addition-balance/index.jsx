@@ -11,14 +11,14 @@ const B_COLOR = '#ff9500'
 const SUM_COLOR = '#34c759'
 const MAX_WEIGHTS = 12
 
-const CANVAS_W = 520
-const CANVAS_H = 420
+const CANVAS_W = 480
+const CANVAS_H = 290
 
-const WEIGHT_R = 9
-const TRAY_INNER_W = 80
-const TRAY_WALL_H = 50
-const TRAY_WALL_THICK = 5
-const TRAY_FLOOR_THICK = 6
+const WEIGHT_R = 8
+const TRAY_INNER_W = 70
+const TRAY_WALL_H = 38
+const TRAY_WALL_THICK = 4
+const TRAY_FLOOR_THICK = 5
 
 /* ---- collision categories ---- */
 const CAT_WEIGHT = 0x0002
@@ -160,10 +160,10 @@ export default function AdditionBalance() {
 
     /* ---- layout ---- */
     const pivotX = CANVAS_W / 2
-    const pivotY = 80
-    const postH = 160
-    const baseW = 100
-    const baseH = 12
+    const pivotY = 38
+    const postH = 105
+    const baseW = 80
+    const baseH = 10
 
     /* static base & post (decorative, no collision) */
     const base = Bodies.rectangle(pivotX, pivotY + postH + baseH / 2, baseW, baseH, {
@@ -178,8 +178,8 @@ export default function AdditionBalance() {
     })
 
     /* ---- beam ---- */
-    const beamHalf = 155   // half-length
-    const beamThick = 7
+    const beamHalf = 140   // half-length
+    const beamThick = 6
     // Beam is kinematic — we drive its angle from weight counts, not physics torque.
     // This keeps the educational concept (count equality = balanced) while still
     // having real physics for the weights inside the trays.
@@ -195,7 +195,7 @@ export default function AdditionBalance() {
     const attachB = -beamHalf * 0.32
     const attachS = beamHalf * 0.82
 
-    const chainLen = 90
+    const chainLen = 60
 
     // Create trays at their initial dangling positions
     const trayABody = createTray(pivotX + attachA, pivotY + chainLen, A_COLOR)
@@ -295,7 +295,7 @@ export default function AdditionBalance() {
     /* ---- supply zone click: spawn a new weight ---- */
     Events.on(mouseConstraint, 'mousedown', (e) => {
       const { x, y } = e.mouse.position
-      if (y > CANVAS_H - 60 && !mouseConstraint.body) {
+      if (y > CANVAS_H - 50 && !mouseConstraint.body) {
         const allWeights = Composite.allBodies(world).filter((b) => b.label === 'weight')
         if (allWeights.length < MAX_WEIGHTS * 3) {
           const w = createWeight(x, y, 'supply')
@@ -388,28 +388,27 @@ export default function AdditionBalance() {
       }
 
       // Supply area
-      const supplyTop = CANVAS_H - 52
+      const supplyTop = CANVAS_H - 42
       ctx.fillStyle = '#f5f5f3'
       ctx.strokeStyle = '#ddd'
       ctx.lineWidth = 1
       ctx.beginPath()
-      ctx.roundRect(24, supplyTop, CANVAS_W - 48, 46, 8)
+      ctx.roundRect(20, supplyTop, CANVAS_W - 40, 36, 6)
       ctx.fill()
       ctx.stroke()
 
-      ctx.fillStyle = '#bbb'
-      ctx.font = '500 10px system-ui, -apple-system, sans-serif'
-      ctx.textAlign = 'center'
-      ctx.fillText('SUPPLY — click to grab a weight, drag onto a tray', CANVAS_W / 2, supplyTop + 14)
-
       // Supply circles
-      const supplyCircleY = CANVAS_H - 22
+      const supplyCircleY = CANVAS_H - 18
       const supplyCount = 7
       const startX = CANVAS_W / 2 - (supplyCount - 1) * (WEIGHT_R * 2.4) / 2
+      ctx.fillStyle = '#bbb'
+      ctx.font = '500 9px system-ui, -apple-system, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('SUPPLY — tap to grab, drag onto a tray', CANVAS_W / 2, supplyTop + 10)
       for (let i = 0; i < supplyCount; i++) {
         const cx = startX + i * (WEIGHT_R * 2.4)
         ctx.beginPath()
-        ctx.arc(cx, supplyCircleY, WEIGHT_R, 0, Math.PI * 2)
+        ctx.arc(cx, supplyCircleY, WEIGHT_R - 1, 0, Math.PI * 2)
         ctx.fillStyle = '#999'
         ctx.fill()
         ctx.strokeStyle = '#fff'
@@ -468,11 +467,6 @@ export default function AdditionBalance() {
 
   return (
     <div style={s.root}>
-      <div style={s.hint}>
-        Click the supply area to grab a weight, then drag it onto any tray.
-        Drag weights between trays or off-tray to remove them.
-      </div>
-
       {/* Equation */}
       <div
         style={{
@@ -506,7 +500,7 @@ export default function AdditionBalance() {
         />
       </div>
 
-      <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+      <div style={{ textAlign: 'center', marginBottom: '0.6rem' }}>
         <button onClick={handleReset} style={s.resetBtn}>Reset weights</button>
       </div>
 
@@ -543,27 +537,20 @@ const s = {
     userSelect: 'none',
     WebkitUserSelect: 'none',
   },
-  hint: {
-    textAlign: 'center',
-    color: 'var(--color-muted)',
-    fontSize: '0.95rem',
-    marginBottom: '1.25rem',
-    fontWeight: 500,
-  },
   equation: {
     textAlign: 'center',
-    fontSize: '2.2rem',
+    fontSize: '1.8rem',
     fontWeight: 700,
     fontFamily: "'SF Mono', 'Fira Code', 'Consolas', monospace",
-    marginBottom: '0.25rem',
+    marginBottom: '0.15rem',
     letterSpacing: '-0.02em',
-    padding: '0.5rem 1rem',
+    padding: '0.35rem 0.75rem',
     borderRadius: 'var(--radius)',
     transition: 'background 0.3s, border-color 0.3s',
   },
   eqOp: { color: 'var(--color-muted)', fontWeight: 400 },
   eqHint: {
-    fontSize: '0.85rem',
+    fontSize: '0.8rem',
     fontWeight: 500,
     color: 'var(--color-muted)',
     fontFamily: 'inherit',
@@ -571,7 +558,7 @@ const s = {
   canvasWrap: {
     width: '100%',
     maxWidth: CANVAS_W,
-    margin: '0 auto 0.75rem',
+    margin: '0 auto 0.5rem',
     position: 'relative',
     aspectRatio: `${CANVAS_W} / ${CANVAS_H}`,
   },
@@ -587,27 +574,28 @@ const s = {
     color: 'var(--color-accent, #4a6cf7)',
     border: 'none',
     borderRadius: '8px',
-    padding: '0.5rem 1.5rem',
-    fontSize: '0.9rem',
+    padding: '0.4rem 1.25rem',
+    fontSize: '0.85rem',
     fontWeight: 600,
     cursor: 'pointer',
   },
   insight: {
     background: '#fff',
     borderRadius: 'var(--radius)',
-    padding: '1.25rem',
+    padding: '1rem',
     border: '2px dashed var(--color-success)',
   },
   insightTitle: {
     fontWeight: 700,
-    fontSize: '0.9rem',
+    fontSize: '0.8rem',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
     color: 'var(--color-success)',
-    marginBottom: '0.4rem',
+    marginBottom: '0.3rem',
   },
   insightText: {
-    fontSize: '0.95rem',
-    lineHeight: 1.5,
+    fontSize: '0.9rem',
+    lineHeight: 1.45,
+    margin: 0,
   },
 }
