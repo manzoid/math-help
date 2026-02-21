@@ -46,6 +46,13 @@ const applets = [
     tags: ['addition', 'handwriting', 'ages 4-6'],
     component: lazy(() => import('./addition-handwriting/index.jsx')),
   },
+  {
+    slug: 'tile-puzzles',
+    title: 'Tile Puzzles',
+    subtitle: 'Fill rectangular grids with puzzle pieces',
+    tags: ['multiplication', 'spatial', 'ages 4-6'],
+    component: lazy(() => import('./tile-puzzles/index.jsx')),
+  },
 ]
 
 export default applets
