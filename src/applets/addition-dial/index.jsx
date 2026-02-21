@@ -4,9 +4,119 @@ const A_COLOR = '#4a6cf7'
 const B_COLOR = '#ff9500'
 const SUM_COLOR = '#34c759'
 const MAX = 20
+const KNOB_SIZE = 48
+const KNOB_RADIUS = KNOB_SIZE / 2
 
 function clamp(n) {
   return Math.max(0, Math.min(MAX, n))
+}
+
+/** SVG circular knob with a notch that rotates as value changes. */
+function Knob({ value, onChange, color }) {
+  const knobRef = useRef(null)
+  const dragging = useRef(false)
+  const startY = useRef(0)
+  const startVal = useRef(0)
+
+  // Map value 0–MAX to rotation 0–360
+  const angle = (value / MAX) * 300 - 150 // -150 to +150 range
+  const notchAngleRad = ((angle - 90) * Math.PI) / 180
+  const notchX = KNOB_RADIUS + (KNOB_RADIUS - 8) * Math.cos(notchAngleRad)
+  const notchY = KNOB_RADIUS + (KNOB_RADIUS - 8) * Math.sin(notchAngleRad)
+
+  const onPointerDown = useCallback(
+    (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      dragging.current = true
+      startY.current = e.clientY
+      startVal.current = value
+      knobRef.current?.setPointerCapture(e.pointerId)
+    },
+    [value],
+  )
+
+  const onPointerMove = useCallback(
+    (e) => {
+      if (!dragging.current) return
+      const dy = startY.current - e.clientY
+      const steps = Math.round(dy / 14)
+      const next = clamp(startVal.current + steps)
+      if (next !== value) onChange(next)
+    },
+    [value, onChange],
+  )
+
+  const onPointerUp = useCallback((e) => {
+    dragging.current = false
+    knobRef.current?.releasePointerCapture(e.pointerId)
+  }, [])
+
+  /* scroll wheel */
+  const scrollAccum = useRef(0)
+  useEffect(() => {
+    const el = knobRef.current
+    if (!el) return
+    const handler = (e) => {
+      e.preventDefault()
+      scrollAccum.current += e.deltaY
+      if (Math.abs(scrollAccum.current) >= 80) {
+        const dir = scrollAccum.current < 0 ? 1 : -1
+        onChange(clamp(value + dir))
+        scrollAccum.current = 0
+      }
+    }
+    el.addEventListener('wheel', handler, { passive: false })
+    return () => el.removeEventListener('wheel', handler)
+  }, [value, onChange])
+
+  return (
+    <svg
+      ref={knobRef}
+      width={KNOB_SIZE}
+      height={KNOB_SIZE}
+      viewBox={`0 0 ${KNOB_SIZE} ${KNOB_SIZE}`}
+      style={s.knob}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+    >
+      {/* outer ring */}
+      <circle
+        cx={KNOB_RADIUS}
+        cy={KNOB_RADIUS}
+        r={KNOB_RADIUS - 2}
+        fill="#f5f5f3"
+        stroke={color}
+        strokeWidth={3}
+      />
+      {/* grip lines */}
+      {[0, 60, 120, 180, 240, 300].map((a) => {
+        const rad = ((a + angle) * Math.PI) / 180
+        const x1 = KNOB_RADIUS + (KNOB_RADIUS - 6) * Math.cos(rad)
+        const y1 = KNOB_RADIUS + (KNOB_RADIUS - 6) * Math.sin(rad)
+        const x2 = KNOB_RADIUS + (KNOB_RADIUS - 10) * Math.cos(rad)
+        const y2 = KNOB_RADIUS + (KNOB_RADIUS - 10) * Math.sin(rad)
+        return (
+          <line
+            key={a}
+            x1={x1} y1={y1} x2={x2} y2={y2}
+            stroke="#ccc"
+            strokeWidth={1.5}
+            strokeLinecap="round"
+          />
+        )
+      })}
+      {/* notch indicator */}
+      <circle
+        cx={notchX}
+        cy={notchY}
+        r={4}
+        fill={color}
+      />
+    </svg>
+  )
 }
 
 /** Dots arranged 2-across */
@@ -27,104 +137,6 @@ function DotGrid({ count, color }) {
   )
 }
 
-/**
- * A draggable column: dial number on top, dots below.
- * The entire column is the drag/scroll target so your finger
- * can rest on the dots while the number stays visible above.
- */
-function DialColumn({ value, onChange, color }) {
-  const colRef = useRef(null)
-  const dragging = useRef(false)
-  const startY = useRef(0)
-  const startVal = useRef(0)
-
-  /* ---- pointer drag (whole column) ---- */
-  const onPointerDown = useCallback(
-    (e) => {
-      // let chevron buttons handle their own clicks
-      if (e.target.closest('button')) return
-      e.preventDefault()
-      dragging.current = true
-      startY.current = e.clientY
-      startVal.current = value
-      colRef.current?.setPointerCapture(e.pointerId)
-    },
-    [value],
-  )
-
-  const onPointerMove = useCallback(
-    (e) => {
-      if (!dragging.current) return
-      const dy = startY.current - e.clientY
-      const steps = Math.round(dy / 18)
-      const next = clamp(startVal.current + steps)
-      if (next !== value) onChange(next)
-    },
-    [value, onChange],
-  )
-
-  const onPointerUp = useCallback((e) => {
-    dragging.current = false
-    colRef.current?.releasePointerCapture(e.pointerId)
-  }, [])
-
-  /* ---- scroll wheel (throttled, whole column) ---- */
-  const scrollAccum = useRef(0)
-  useEffect(() => {
-    const el = colRef.current
-    if (!el) return
-    const handler = (e) => {
-      e.preventDefault()
-      scrollAccum.current += e.deltaY
-      const threshold = 80
-      if (Math.abs(scrollAccum.current) >= threshold) {
-        const dir = scrollAccum.current < 0 ? 1 : -1
-        onChange(clamp(value + dir))
-        scrollAccum.current = 0
-      }
-    }
-    el.addEventListener('wheel', handler, { passive: false })
-    return () => el.removeEventListener('wheel', handler)
-  }, [value, onChange])
-
-  return (
-    <div
-      ref={colRef}
-      style={s.column}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
-    >
-      {/* chevron up */}
-      <button
-        style={s.chevron}
-        onClick={() => onChange(clamp(value + 1))}
-        aria-label="increase"
-      >
-        &#x25B2;
-      </button>
-
-      {/* number display */}
-      <div style={{ ...s.dialWindow, borderColor: color }}>
-        <div style={{ ...s.dialValue, color }}>{value}</div>
-      </div>
-
-      {/* chevron down */}
-      <button
-        style={s.chevron}
-        onClick={() => onChange(clamp(value - 1))}
-        aria-label="decrease"
-      >
-        &#x25BC;
-      </button>
-
-      {/* dots */}
-      <DotGrid count={value} color={color} />
-    </div>
-  )
-}
-
 export default function AdditionDial() {
   const [a, setA] = useState(5)
   const [b, setB] = useState(6)
@@ -133,18 +145,37 @@ export default function AdditionDial() {
   return (
     <div style={s.root}>
       <div style={s.hint}>
-        Drag up or down on the dots &mdash; watch the sum follow!
+        Drag a dial up or down &mdash; watch the sum follow!
       </div>
 
       <div style={s.equation}>
-        <DialColumn value={a} onChange={setA} color={A_COLOR} />
+        {/* first addend */}
+        <div style={s.column}>
+          <div style={s.numRow}>
+            <Knob value={a} onChange={setA} color={A_COLOR} />
+            <div style={{ ...s.number, color: A_COLOR }}>{a}</div>
+          </div>
+          <DotGrid count={a} color={A_COLOR} />
+        </div>
+
         <span style={s.op}>+</span>
-        <DialColumn value={b} onChange={setB} color={B_COLOR} />
+
+        {/* second addend */}
+        <div style={s.column}>
+          <div style={s.numRow}>
+            <Knob value={b} onChange={setB} color={B_COLOR} />
+            <div style={{ ...s.number, color: B_COLOR }}>{b}</div>
+          </div>
+          <DotGrid count={b} color={B_COLOR} />
+        </div>
+
         <span style={s.op}>=</span>
 
-        {/* sum column (not draggable) */}
+        {/* sum */}
         <div style={s.column}>
-          <div style={{ ...s.sumDisplay, color: SUM_COLOR }}>{sum}</div>
+          <div style={s.numRow}>
+            <div style={{ ...s.number, color: SUM_COLOR }}>{sum}</div>
+          </div>
           <DotGrid count={sum} color={SUM_COLOR} />
         </div>
       </div>
@@ -183,66 +214,41 @@ const s = {
     display: 'flex',
     alignItems: 'flex-start',
     justifyContent: 'center',
-    gap: '1rem',
+    gap: '1.25rem',
     marginBottom: '2rem',
   },
   column: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '0.5rem',
-    cursor: 'ns-resize',
-    touchAction: 'none',
+    gap: '0.6rem',
+  },
+  numRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.4rem',
+  },
+  number: {
+    fontSize: '2.6rem',
+    fontWeight: 700,
+    fontFamily: "'SF Mono', 'Fira Code', 'Consolas', monospace",
+    lineHeight: 1,
+    minWidth: 40,
+    textAlign: 'center',
   },
   op: {
     fontSize: '2.2rem',
     fontWeight: 400,
     color: 'var(--color-muted)',
     fontFamily: "'SF Mono', 'Fira Code', 'Consolas', monospace",
-    userSelect: 'none',
-    marginTop: 28,
-  },
-  sumDisplay: {
-    fontSize: '2.8rem',
-    fontWeight: 700,
-    fontFamily: "'SF Mono', 'Fira Code', 'Consolas', monospace",
-    minWidth: 56,
-    textAlign: 'center',
-    height: 72,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
+    marginTop: 8,
   },
 
-  /* dial display */
-  chevron: {
-    background: 'none',
-    border: 'none',
-    fontSize: '0.75rem',
-    color: 'var(--color-muted)',
-    padding: '0.2rem 0.5rem',
-    lineHeight: 1,
-    cursor: 'pointer',
-    transition: 'color 0.15s',
-  },
-  dialWindow: {
-    width: 72,
-    height: 72,
-    borderRadius: 14,
-    border: '3px solid',
-    background: '#fff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    boxShadow: 'var(--shadow-md)',
-    overflow: 'hidden',
-    pointerEvents: 'none',
-  },
-  dialValue: {
-    fontSize: '2.8rem',
-    fontWeight: 700,
-    fontFamily: "'SF Mono', 'Fira Code', 'Consolas', monospace",
-    lineHeight: 1,
+  /* knob */
+  knob: {
+    cursor: 'ns-resize',
+    touchAction: 'none',
+    flexShrink: 0,
   },
 
   /* dot grid (2 across) */
