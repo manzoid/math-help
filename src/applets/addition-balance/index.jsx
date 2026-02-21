@@ -8,19 +8,19 @@ const COLORS    = { a: A_COLOR, b: B_COLOR, sum: SUM_COLOR }
 
 /* ---- SVG viewBox ---- */
 const W = 480
-const H = 290
+const H = 340
 
 /* ---- layout constants (in viewBox units) ---- */
 const PIVOT     = { x: W / 2, y: 38 }
-const POST_H    = 105
-const BEAM_HALF = 140
-const BEAM_H    = 6
-const CHAIN_LEN = 60
-const TRAY_W    = 70
-const TRAY_WALL_H = 38
+const POST_H    = 120
+const BEAM_HALF = 160
+const BEAM_H    = 8
+const CHAIN_LEN = 65
+const TRAY_W    = 90
+const TRAY_WALL_H = 50
 const TRAY_WALL_T = 4
 const TRAY_FLOOR_H = 5
-const WEIGHT_R  = 8
+const WEIGHT_R  = 12
 const MAX_ANGLE = 0.28
 
 /* beam attachment x-offsets from pivot */
