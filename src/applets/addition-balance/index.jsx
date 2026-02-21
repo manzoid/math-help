@@ -19,7 +19,9 @@ const CHAIN_LEN = 75
 const TRAY_W = 80
 const TRAY_DEPTH = 8
 const WEIGHT_R = 8
-const MAX_TILT_DEG = 16
+const MAX_TILT_DEG = 22
+const IMBALANCE_BG = 'rgba(255, 59, 48, 0.08)'
+const IMBALANCE_BORDER = 'rgba(255, 59, 48, 0.25)'
 
 /* ---- helpers ---- */
 
@@ -34,7 +36,7 @@ function rotatePoint(px, py, cx, cy, deg) {
 
 function tiltAngle(leftTotal, rightTotal) {
   const diff = leftTotal - rightTotal
-  const raw = diff * 3
+  const raw = diff * 6
   return Math.max(-MAX_TILT_DEG, Math.min(MAX_TILT_DEG, raw))
 }
 
@@ -218,7 +220,8 @@ export default function AdditionBalance() {
       if (tray) {
         addToTray(tray)
       } else if (dragging.source !== 'supply') {
-        // Dropped outside any tray — weight disappears (removed already)
+        // Dropped outside any tray — put it back where it came from
+        addToTray(dragging.source)
       }
 
       setDragging(null)
@@ -245,12 +248,18 @@ export default function AdditionBalance() {
       </div>
 
       {/* Big equation */}
-      <div style={s.equation}>
+      <div
+        style={{
+          ...s.equation,
+          background: balanced ? 'transparent' : IMBALANCE_BG,
+          border: balanced ? '2px solid transparent' : `2px solid ${IMBALANCE_BORDER}`,
+        }}
+      >
         <span style={{ color: A_COLOR }}>{a}</span>
         <span style={s.eqOp}> + </span>
         <span style={{ color: B_COLOR }}>{b}</span>
-        <span style={s.eqOp}> = </span>
-        <span style={{ color: balanced ? SUM_COLOR : '#ccc' }}>{sum}</span>
+        <span style={s.eqOp}> {balanced ? '=' : '\u2260'} </span>
+        <span style={{ color: balanced ? SUM_COLOR : '#e04040' }}>{sum}</span>
         {!balanced && (
           <span style={s.eqHint}>
             {leftTotal > sum ? ' (left heavier)' : ' (right heavier)'}
@@ -452,6 +461,9 @@ const s = {
     fontFamily: "'SF Mono', 'Fira Code', 'Consolas', monospace",
     marginBottom: '0.25rem',
     letterSpacing: '-0.02em',
+    padding: '0.5rem 1rem',
+    borderRadius: 'var(--radius)',
+    transition: 'background 0.3s, border-color 0.3s',
   },
   eqOp: { color: 'var(--color-muted)', fontWeight: 400 },
   eqHint: {
