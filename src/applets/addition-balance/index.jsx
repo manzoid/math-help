@@ -8,23 +8,23 @@ const COLORS    = { a: A_COLOR, b: B_COLOR, sum: SUM_COLOR }
 
 /* ---- SVG viewBox ---- */
 const W = 480
-const H = 340
+const H = 310
 
 /* ---- layout constants (in viewBox units) ---- */
 const PIVOT     = { x: W / 2, y: 38 }
-const POST_H    = 120
-const BEAM_HALF = 160
-const BEAM_H    = 8
-const CHAIN_LEN = 65
-const TRAY_W    = 90
-const TRAY_WALL_H = 50
+const POST_H    = 105
+const BEAM_HALF = 140
+const BEAM_H    = 6
+const CHAIN_LEN = 60
+const TRAY_W    = 78
+const TRAY_WALL_H = 44
 const TRAY_WALL_T = 4
 const TRAY_FLOOR_H = 5
 const WEIGHT_R  = 12
 const MAX_ANGLE = 0.28
 
 /* beam attachment x-offsets from pivot */
-const ATTACH = { a: -BEAM_HALF * 0.85, b: -BEAM_HALF * 0.32, sum: BEAM_HALF * 0.82 }
+const ATTACH = { a: -BEAM_HALF * 0.85, b: -BEAM_HALF * 0.22, sum: BEAM_HALF * 0.82 }
 
 /* ---- id generator ---- */
 let _nid = 100
@@ -102,8 +102,8 @@ export default function AdditionBalance() {
   function gridXY(tray, i) {
     const t = trayPos[tray]
     return {
-      x: t.x + ((i % 3) - 1) * (WEIGHT_R * 2.5),
-      y: t.y - TRAY_FLOOR_H / 2 - WEIGHT_R - 1 - Math.floor(i / 3) * (WEIGHT_R * 2.3),
+      x: t.x + ((i % 3) - 1) * (WEIGHT_R * 2.15),
+      y: t.y - TRAY_FLOOR_H / 2 - WEIGHT_R - 1 - Math.floor(i / 3) * (WEIGHT_R * 2.15),
     }
   }
 
