@@ -113,20 +113,21 @@ function extractDigitTensor(imageData, bbox, colRegion) {
   const offX = pad + Math.round((size - dw) / 2)
   const offY = pad + Math.round((size - dh) / 2)
 
-  // copy pixel by pixel, inverting: drawn pixels become white
+  // copy pixel by pixel, using alpha as intensity (preserves anti-aliasing)
   const tmpData = tctx.getImageData(0, 0, totalSize, totalSize)
   for (let y = dTop; y < dBottom; y++) {
     for (let x = dLeft; x < dRight; x++) {
       const srcIdx = (y * width + x) * 4
       const alpha = data[srcIdx + 3]
-      if (alpha > 20) {
+      if (alpha > 10) {
         const dx = offX + (x - dLeft)
         const dy = offY + (y - dTop)
         const dstIdx = (dy * totalSize + dx) * 4
-        tmpData.data[dstIdx] = 255     // R
-        tmpData.data[dstIdx + 1] = 255 // G
-        tmpData.data[dstIdx + 2] = 255 // B
-        tmpData.data[dstIdx + 3] = 255 // A
+        const val = Math.min(255, alpha * 1.5) // boost and use as brightness
+        tmpData.data[dstIdx] = val
+        tmpData.data[dstIdx + 1] = val
+        tmpData.data[dstIdx + 2] = val
+        tmpData.data[dstIdx + 3] = 255
       }
     }
   }
@@ -141,12 +142,22 @@ function extractDigitTensor(imageData, bbox, colRegion) {
   octx.imageSmoothingQuality = 'high'
   octx.drawImage(tmp, 0, 0, 28, 28)
 
+  // apply a light blur to smooth jagged edges (mimics MNIST Gaussian)
+  octx.filter = 'blur(0.8px)'
+  octx.drawImage(out, 0, 0)
+  octx.filter = 'none'
+
   // convert to grayscale float tensor [1, 28, 28, 1], normalized 0-1
   const pixels = octx.getImageData(0, 0, 28, 28)
   const floats = new Float32Array(784)
+  let maxVal = 0
   for (let i = 0; i < 784; i++) {
-    // use red channel (all channels are same since we drew white on black)
     floats[i] = pixels.data[i * 4] / 255
+    if (floats[i] > maxVal) maxVal = floats[i]
+  }
+  // normalize so brightest pixel is 1.0 (matches MNIST range)
+  if (maxVal > 0 && maxVal < 1) {
+    for (let i = 0; i < 784; i++) floats[i] /= maxVal
   }
   return tf.tensor4d(floats, [1, 28, 28, 1])
 }
@@ -248,7 +259,7 @@ export default function AdditionHandwriting() {
     ctx.scale(pr, pr)
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
-    ctx.lineWidth = 6
+    ctx.lineWidth = 14
     ctx.strokeStyle = '#333'
   }, [modelReady])
 
@@ -265,7 +276,7 @@ export default function AdditionHandwriting() {
 
     // ctx.scale(pr) was applied in setup, so use CSS-pixel coords
     const ctx = canvas.getContext('2d')
-    ctx.lineWidth = 6
+    ctx.lineWidth = 14
     ctx.strokeStyle = '#333'
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
