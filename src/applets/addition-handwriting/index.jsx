@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import * as tf from '@tensorflow/tfjs'
+import CelebrationOverlay from './CelebrationOverlay.jsx'
 
 const A_COLOR   = '#4a6cf7'
 const B_COLOR   = '#ff9500'
@@ -173,6 +174,7 @@ export default function AdditionHandwriting() {
   const [modelError, setModelError] = useState(null)
   const [recognized, setRecognized] = useState(null)
   const [result, setResult] = useState(null)
+  const [showCelebration, setShowCelebration] = useState(false)
   const [drawing, setDrawing] = useState(false)
   const [hasStrokes, setHasStrokes] = useState(false)
 
@@ -321,6 +323,7 @@ export default function AdditionHandwriting() {
     const num = parseInt(recognized, 10)
     if (num === problem.answer) {
       setResult('correct')
+      setShowCelebration(true)
     } else {
       setResult('wrong')
     }
@@ -435,6 +438,10 @@ export default function AdditionHandwriting() {
             )}
           </div>
         </>
+      )}
+
+      {showCelebration && (
+        <CelebrationOverlay onDone={() => setShowCelebration(false)} />
       )}
 
       {/* insight */}
