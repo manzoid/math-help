@@ -387,22 +387,44 @@ export default function TilePuzzles() {
       for (let c = 0; c < gridW; c++) {
         const pid = grid[r][c]
         const piece = pid !== null ? pieces.find(p => p.id === pid) : null
-        rects.push(
-          <rect
-            key={`${r}-${c}`}
-            x={PAD + c * CELL}
-            y={PAD + r * CELL}
-            width={CELL}
-            height={CELL}
-            rx={piece ? 0 : 4}
-            fill={piece ? piece.color : '#f0f0ee'}
-            stroke={piece ? 'none' : '#ddd'}
-            strokeWidth={piece ? 0 : 1}
-            opacity={piece ? 0.9 : 1}
-            style={{ cursor: piece ? 'pointer' : 'default' }}
-            onPointerDown={piece ? (e) => onGridPieceDown(e, pid) : undefined}
-          />
-        )
+        const cx = PAD + c * CELL
+        const cy = PAD + r * CELL
+        if (piece) {
+          const inset = 1.5
+          rects.push(
+            <g key={`${r}-${c}`}
+              style={{ cursor: 'pointer' }}
+              onPointerDown={(e) => onGridPieceDown(e, pid)}
+            >
+              {/* base cell */}
+              <rect
+                x={cx + inset} y={cy + inset}
+                width={CELL - inset * 2} height={CELL - inset * 2}
+                rx={4}
+                fill={piece.color}
+              />
+              {/* top-left highlight for bevel */}
+              <rect
+                x={cx + inset} y={cy + inset}
+                width={CELL - inset * 2} height={CELL - inset * 2}
+                rx={4}
+                fill="url(#cellBevel)"
+              />
+            </g>
+          )
+        } else {
+          rects.push(
+            <rect
+              key={`${r}-${c}`}
+              x={cx + 1} y={cy + 1}
+              width={CELL - 2} height={CELL - 2}
+              rx={4}
+              fill="#f0f0ee"
+              stroke="#ddd"
+              strokeWidth={1}
+            />
+          )
+        }
       }
     }
     return rects
@@ -752,6 +774,12 @@ export default function TilePuzzles() {
 
         {/* CSS animations for celebration */}
         <defs>
+          {/* bevel gradient for gem-like cells */}
+          <linearGradient id="cellBevel" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#fff" stopOpacity="0.35" />
+            <stop offset="50%" stopColor="#fff" stopOpacity="0.05" />
+            <stop offset="100%" stopColor="#000" stopOpacity="0.15" />
+          </linearGradient>
           <style>{`
             @keyframes sumCelebrate {
               0% { transform: scale(1); }
