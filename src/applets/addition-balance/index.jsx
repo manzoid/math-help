@@ -13,7 +13,7 @@ const H = 310
 /* ---- layout constants (in viewBox units) ---- */
 const PIVOT     = { x: W / 2, y: 38 }
 const POST_H    = 105
-const BEAM_HALF = 140
+const BEAM_HALF = 175
 const BEAM_H    = 6
 const CHAIN_LEN = 60
 const TRAY_W    = 78
@@ -24,7 +24,7 @@ const WEIGHT_R  = 12
 const MAX_ANGLE = 0.28
 
 /* beam attachment x-offsets from pivot */
-const ATTACH = { a: -BEAM_HALF * 0.85, b: -BEAM_HALF * 0.22, sum: BEAM_HALF * 0.82 }
+const ATTACH = { a: -BEAM_HALF * 0.85, b: -BEAM_HALF * 0.32, sum: BEAM_HALF * 0.82 }
 
 /* ---- id generator ---- */
 let _nid = 100
@@ -119,7 +119,7 @@ export default function AdditionBalance() {
     for (const [label, tp] of Object.entries(trayPos)) {
       const hw = TRAY_W / 2 + 15
       if (sx > tp.x - hw && sx < tp.x + hw &&
-          sy > tp.y - TRAY_WALL_H - 25 && sy < tp.y + 15)
+          sy > tp.y - TRAY_WALL_H - 100 && sy < tp.y + 15)
         return label
     }
     return null
