@@ -202,6 +202,15 @@ export default function AdditionBalance() {
 
     trayBodiesRef.current = { a: trayABody, b: trayBBody, sum: traySBody }
 
+    // Snapshot initial tray positions (at beam angle 0) so we can
+    // compute displacement when the beam tilts.
+    const trayInitPos = {
+      a: { x: trayABody.position.x, y: trayABody.position.y },
+      b: { x: trayBBody.position.x, y: trayBBody.position.y },
+      sum: { x: traySBody.position.x, y: traySBody.position.y },
+    }
+    const trayAttachX = { a: attachA, b: attachB, sum: attachS }
+
     /* ---- chain constraints (rendered manually, invisible to matter-js) ---- */
     const allChains = []
     function makeChain(beamOffsetX, trayBody, trayCreateY) {
@@ -340,6 +349,22 @@ export default function AdditionBalance() {
       const damping = 0.75
       beamAngleVel = beamAngleVel * damping + (targetAngle - beam.angle) * stiffness
       Body.setAngle(beam, beam.angle + beamAngleVel)
+
+      // Move trays to follow beam rotation — constraints alone don't
+      // propagate position changes from a static body reliably.
+      const cosA = Math.cos(beam.angle)
+      const sinA = Math.sin(beam.angle)
+      for (const label of ['a', 'b', 'sum']) {
+        const tray = trayBodiesRef.current[label]
+        const init = trayInitPos[label]
+        const offX = trayAttachX[label]
+        if (!tray || !init) continue
+        Body.setPosition(tray, {
+          x: init.x + (cosA - 1) * offX,
+          y: init.y + sinA * offX,
+        })
+        Body.setAngle(tray, 0)
+      }
 
       for (const b of Composite.allBodies(world)) {
         if (b.label === 'weight' && (b.position.y > H + 80 || b.position.x < -50 || b.position.x > W + 50)) {
