@@ -7,7 +7,8 @@ const PAD = 20
 const TRAY_GAP = 20
 const TRAY_SCALE = 0.55
 const TAP_THRESHOLD = 5
-const DRAG_LIFT = 45 // lift drag piece above finger
+const DRAG_LIFT_MOUSE = 30
+const DRAG_LIFT_TOUCH = 80 // bigger offset so finger doesn't occlude piece
 const TRAY_ROW_H = 55 // height of one tray row
 
 /* stable SVG width across all levels so layout never shifts */
@@ -326,15 +327,16 @@ export default function TilePuzzles() {
 
     const p = toSVG(e.clientX, e.clientY)
     const piece = piecesRef.current.find(pp => pp.id === pieceId)
+    const lift = e.pointerType === 'touch' ? DRAG_LIFT_TOUCH : DRAG_LIFT_MOUSE
 
     resetGesture()
     rotAnimRef.current = { key: 0, fromDeg: 0 }
-    dragStart.current = { x: p.x, y: p.y, pieceId, moved: false }
+    dragStart.current = { x: p.x, y: p.y, pieceId, moved: false, lift }
 
     setDrag({
       pieceId,
       svgX: p.x,
-      svgY: p.y - DRAG_LIFT,
+      svgY: p.y - lift,
       snapRow: null,
       snapCol: null,
       originalRotation: piece ? piece.rotation : 0,
@@ -349,18 +351,19 @@ export default function TilePuzzles() {
 
     const p = toSVG(e.clientX, e.clientY)
     const piece = piecesRef.current.find(pp => pp.id === pieceId)
+    const lift = e.pointerType === 'touch' ? DRAG_LIFT_TOUCH : DRAG_LIFT_MOUSE
 
     // remove from grid, then hold it like a tray piece
     removePiece(pieceId)
 
     resetGesture()
     rotAnimRef.current = { key: 0, fromDeg: 0 }
-    dragStart.current = { x: p.x, y: p.y, pieceId, moved: false }
+    dragStart.current = { x: p.x, y: p.y, pieceId, moved: false, lift }
 
     setDrag({
       pieceId,
       svgX: p.x,
-      svgY: p.y - DRAG_LIFT,
+      svgY: p.y - lift,
       snapRow: null,
       snapCol: null,
       originalRotation: piece ? piece.rotation : 0,
@@ -393,7 +396,7 @@ export default function TilePuzzles() {
     const piece = piecesRef.current.find(pp => pp.id === dragStart.current.pieceId)
     if (!piece) return
     const cells = getCells(piece)
-    const liftedY = p.y - DRAG_LIFT
+    const liftedY = p.y - dragStart.current.lift
     const snap = snapToGrid(p.x, liftedY, cells)
     const valid = canPlace(gridRef.current, cells, snap.row, snap.col, gridW, gridH, null)
 
