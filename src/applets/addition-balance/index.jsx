@@ -204,33 +204,40 @@ export default function AdditionBalance() {
 
     /* ---- chain constraints (rendered manually, invisible to matter-js) ---- */
     const allChains = []
-    function makeChain(beamOffsetX, trayBody) {
+    function makeChain(beamOffsetX, trayBody, trayCreateY) {
       const spread = d.trayInnerW / 3
+      // Compound body center of mass is above the floor we specified.
+      // Compute the correct body-local Y for the wall tops.
+      const wallTopWorldY = trayCreateY - d.trayWallH
+      const wallTopLocalY = wallTopWorldY - trayBody.position.y
+      const len = wallTopWorldY - (pivotY + beamThick / 2)
+
       const c1 = Constraint.create({
         bodyA: beam,
         pointA: { x: beamOffsetX - spread / 2, y: beamThick / 2 },
         bodyB: trayBody,
-        pointB: { x: -spread / 2, y: -d.trayWallH / 2 },
+        pointB: { x: -spread / 2, y: wallTopLocalY },
         stiffness: 1,
-        length: chainLen - d.trayWallH / 2,
+        length: len,
         render: { visible: false },
       })
       const c2 = Constraint.create({
         bodyA: beam,
         pointA: { x: beamOffsetX + spread / 2, y: beamThick / 2 },
         bodyB: trayBody,
-        pointB: { x: spread / 2, y: -d.trayWallH / 2 },
+        pointB: { x: spread / 2, y: wallTopLocalY },
         stiffness: 1,
-        length: chainLen - d.trayWallH / 2,
+        length: len,
         render: { visible: false },
       })
       allChains.push(c1, c2)
       return [c1, c2]
     }
 
-    const chainsA = makeChain(attachA, trayABody)
-    const chainsB = makeChain(attachB, trayBBody)
-    const chainsS = makeChain(attachS, traySBody)
+    const trayCreateY = pivotY + chainLen
+    const chainsA = makeChain(attachA, trayABody, trayCreateY)
+    const chainsB = makeChain(attachB, trayBBody, trayCreateY)
+    const chainsS = makeChain(attachS, traySBody, trayCreateY)
 
     /* ---- boundaries ---- */
     const floor = Bodies.rectangle(W / 2, H + 25, W + 100, 50, {
@@ -281,7 +288,7 @@ export default function AdditionBalance() {
         damping: 0.15,
         render: { visible: false },
       },
-      collisionFilter: { mask: CAT_WEIGHT },
+      collisionFilter: { category: CAT_WEIGHT, mask: CAT_WEIGHT },
     })
     Composite.add(world, mouseConstraint)
     render.mouse = mouse
