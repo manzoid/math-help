@@ -259,7 +259,7 @@ export default function AdditionHandwriting() {
     ctx.scale(pr, pr)
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
-    ctx.lineWidth = 14
+    ctx.lineWidth = 9
     ctx.strokeStyle = '#333'
   }, [modelReady])
 
@@ -276,7 +276,7 @@ export default function AdditionHandwriting() {
 
     // ctx.scale(pr) was applied in setup, so use CSS-pixel coords
     const ctx = canvas.getContext('2d')
-    ctx.lineWidth = 14
+    ctx.lineWidth = 9
     ctx.strokeStyle = '#333'
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
