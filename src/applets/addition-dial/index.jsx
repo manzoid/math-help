@@ -8,63 +8,178 @@ const MAX = 20
 const W = 40
 const H = 88
 const RIDGE_SPACING = 7
+const PX_PER_STEP = 16 // pixels of drag per +1 value
 
-function clamp(n) {
+function clampVal(n) {
   return Math.max(0, Math.min(MAX, n))
+}
+function clampOffset(o) {
+  return Math.max(0, Math.min(MAX * PX_PER_STEP, o))
 }
 
 /**
- * Realistic thumbwheel — a 3D cylindrical barrel with knurled ridges
- * that animate smoothly as you drag up/down.
+ * Realistic thumbwheel with continuous animation and momentum.
+ *
+ * Internally tracks a continuous pixel offset that drives the ridge
+ * positions. The integer value is derived from the offset, so ridges
+ * move 1:1 with your finger. On release, momentum keeps the wheel
+ * spinning and decelerating.
  */
 function Thumbwheel({ value, onChange, color }) {
   const id = useId()
-  const ref = useRef(null)
+  const svgRef = useRef(null)
+
+  // Continuous pixel offset drives visual ridge positions
+  const offset = useRef(value * PX_PER_STEP)
+  const [renderOffset, setRenderOffset] = useState(value * PX_PER_STEP)
+
+  // Dragging state
   const dragging = useRef(false)
   const startY = useRef(0)
-  const startVal = useRef(0)
+  const startOffset = useRef(0)
 
-  // Smooth pixel offset for ridge animation
-  const ridgePixelOffset = (value * RIDGE_SPACING) % (RIDGE_SPACING * 2)
+  // Velocity tracking for momentum
+  const lastY = useRef(0)
+  const lastTime = useRef(0)
+  const velocity = useRef(0)
+  const momentumRaf = useRef(null)
 
+  // Sync offset when value changes externally
+  useEffect(() => {
+    if (!dragging.current && momentumRaf.current === null) {
+      offset.current = value * PX_PER_STEP
+      setRenderOffset(value * PX_PER_STEP)
+    }
+  }, [value])
+
+  const updateFromOffset = useCallback(
+    (newOffset) => {
+      const clamped = clampOffset(newOffset)
+      offset.current = clamped
+      setRenderOffset(clamped)
+      const newVal = clampVal(Math.round(clamped / PX_PER_STEP))
+      if (newVal !== value) onChange(newVal)
+    },
+    [value, onChange],
+  )
+
+  /* ---- pointer drag ---- */
   const onPointerDown = useCallback(
     (e) => {
       e.preventDefault()
       e.stopPropagation()
+      // Cancel any momentum animation
+      if (momentumRaf.current) {
+        cancelAnimationFrame(momentumRaf.current)
+        momentumRaf.current = null
+      }
       dragging.current = true
       startY.current = e.clientY
-      startVal.current = value
-      ref.current?.setPointerCapture(e.pointerId)
+      startOffset.current = offset.current
+      lastY.current = e.clientY
+      lastTime.current = performance.now()
+      velocity.current = 0
+      svgRef.current?.setPointerCapture(e.pointerId)
     },
-    [value],
+    [],
   )
 
   const onPointerMove = useCallback(
     (e) => {
       if (!dragging.current) return
-      const dy = startY.current - e.clientY
-      const steps = Math.round(dy / 16)
-      const next = clamp(startVal.current + steps)
-      if (next !== value) onChange(next)
+      const dy = startY.current - e.clientY // up = positive
+      const newOffset = startOffset.current + dy
+
+      // Track velocity
+      const now = performance.now()
+      const dt = now - lastTime.current
+      if (dt > 0) {
+        const instantV = (lastY.current - e.clientY) / dt
+        // Smooth velocity with exponential moving average
+        velocity.current = velocity.current * 0.7 + instantV * 0.3
+      }
+      lastY.current = e.clientY
+      lastTime.current = now
+
+      updateFromOffset(newOffset)
     },
-    [value, onChange],
+    [updateFromOffset],
   )
 
-  const onPointerUp = useCallback((e) => {
-    dragging.current = false
-    ref.current?.releasePointerCapture(e.pointerId)
+  const startMomentum = useCallback(() => {
+    const friction = 0.94
+    const minVelocity = 0.02
+
+    let lastFrame = performance.now()
+
+    const tick = (now) => {
+      const dt = now - lastFrame
+      lastFrame = now
+
+      // Apply velocity
+      const px = velocity.current * dt
+      const newOffset = clampOffset(offset.current + px)
+
+      // Hit bounds? stop
+      if (newOffset <= 0 || newOffset >= MAX * PX_PER_STEP) {
+        velocity.current = 0
+      }
+
+      offset.current = newOffset
+      setRenderOffset(newOffset)
+
+      const newVal = clampVal(Math.round(newOffset / PX_PER_STEP))
+      if (newVal !== value) onChange(newVal)
+
+      // Decelerate
+      velocity.current *= friction
+
+      if (Math.abs(velocity.current) > minVelocity) {
+        momentumRaf.current = requestAnimationFrame(tick)
+      } else {
+        // Snap to nearest integer value
+        momentumRaf.current = null
+        const snappedOffset = clampVal(Math.round(newOffset / PX_PER_STEP)) * PX_PER_STEP
+        offset.current = snappedOffset
+        setRenderOffset(snappedOffset)
+      }
+    }
+
+    if (Math.abs(velocity.current) > minVelocity) {
+      momentumRaf.current = requestAnimationFrame(tick)
+    }
+  }, [value, onChange])
+
+  const onPointerUp = useCallback(
+    (e) => {
+      dragging.current = false
+      svgRef.current?.releasePointerCapture(e.pointerId)
+      startMomentum()
+    },
+    [startMomentum],
+  )
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (momentumRaf.current) cancelAnimationFrame(momentumRaf.current)
+    }
   }, [])
 
+  /* ---- scroll wheel ---- */
   const scrollAccum = useRef(0)
   useEffect(() => {
-    const el = ref.current
+    const el = svgRef.current
     if (!el) return
     const handler = (e) => {
       e.preventDefault()
       scrollAccum.current += e.deltaY
       if (Math.abs(scrollAccum.current) >= 80) {
         const dir = scrollAccum.current < 0 ? 1 : -1
-        onChange(clamp(value + dir))
+        const newVal = clampVal(value + dir)
+        onChange(newVal)
+        offset.current = newVal * PX_PER_STEP
+        setRenderOffset(newVal * PX_PER_STEP)
         scrollAccum.current = 0
       }
     }
@@ -72,38 +187,36 @@ function Thumbwheel({ value, onChange, color }) {
     return () => el.removeEventListener('wheel', handler)
   }, [value, onChange])
 
-  // Build knurled ridges with 3D barrel curvature
+  // Compute ridge offset from continuous pixel offset
+  const ridgePixelOffset = (renderOffset / PX_PER_STEP * RIDGE_SPACING) % (RIDGE_SPACING * 2)
+
+  // Build knurled ridges
   const ridgeCount = Math.ceil(H / RIDGE_SPACING) + 4
   const ridges = []
   for (let i = 0; i < ridgeCount; i++) {
     const y = i * RIDGE_SPACING - ridgePixelOffset - RIDGE_SPACING
     if (y < -RIDGE_SPACING || y > H + RIDGE_SPACING) continue
 
-    // Barrel curvature: distance from vertical center
-    const t = (y - H / 2) / (H / 2) // -1 to 1
-    const curve = Math.sqrt(1 - t * t) // circular cross-section
+    const t = (y - H / 2) / (H / 2)
+    const tClamped = Math.max(-1, Math.min(1, t))
+    const curve = Math.sqrt(1 - tClamped * tClamped)
 
-    // Ridge width narrows toward edges
     const ridgeInset = (1 - curve) * (W * 0.4)
     const x1 = 4 + ridgeInset
     const x2 = W - 4 - ridgeInset
 
-    if (x2 - x1 < 4) continue // too narrow at edges, skip
+    if (x2 - x1 < 4) continue
 
-    // Opacity fades toward edges
     const opacity = curve * 0.9
 
-    // Each ridge = groove shadow + highlight pair
     ridges.push(
       <g key={i} opacity={opacity}>
-        {/* groove (dark) */}
         <line
           x1={x1} y1={y} x2={x2} y2={y}
           stroke="#555"
           strokeWidth={1.8}
           strokeLinecap="round"
         />
-        {/* highlight (light, offset up) */}
         <line
           x1={x1 + 0.5} y1={y - 1.5} x2={x2 - 0.5} y2={y - 1.5}
           stroke="rgba(255,255,255,0.55)"
@@ -123,7 +236,7 @@ function Thumbwheel({ value, onChange, color }) {
 
   return (
     <svg
-      ref={ref}
+      ref={svgRef}
       width={W}
       height={H}
       viewBox={`0 0 ${W} ${H}`}
@@ -134,7 +247,6 @@ function Thumbwheel({ value, onChange, color }) {
       onPointerCancel={onPointerUp}
     >
       <defs>
-        {/* 3D cylinder body gradient (horizontal: dark edges, light center) */}
         <linearGradient id={bodyGradId} x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor="#888" />
           <stop offset="15%" stopColor="#b0b0b0" />
@@ -143,7 +255,6 @@ function Thumbwheel({ value, onChange, color }) {
           <stop offset="85%" stopColor="#b0b0b0" />
           <stop offset="100%" stopColor="#888" />
         </linearGradient>
-        {/* specular highlight */}
         <linearGradient id={shineId} x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor="white" stopOpacity={0} />
           <stop offset="35%" stopColor="white" stopOpacity={0} />
@@ -152,7 +263,6 @@ function Thumbwheel({ value, onChange, color }) {
           <stop offset="65%" stopColor="white" stopOpacity={0} />
           <stop offset="100%" stopColor="white" stopOpacity={0} />
         </linearGradient>
-        {/* top/bottom barrel rolloff shadows */}
         <linearGradient id={topShadowId} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#666" stopOpacity={0.7} />
           <stop offset="100%" stopColor="#666" stopOpacity={0} />
@@ -161,7 +271,6 @@ function Thumbwheel({ value, onChange, color }) {
           <stop offset="0%" stopColor="#666" stopOpacity={0} />
           <stop offset="100%" stopColor="#666" stopOpacity={0.7} />
         </linearGradient>
-        {/* left/right edge darkening */}
         <linearGradient id={edgeShadowId} x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor="#000" stopOpacity={0.15} />
           <stop offset="12%" stopColor="#000" stopOpacity={0} />
@@ -180,7 +289,7 @@ function Thumbwheel({ value, onChange, color }) {
         fill="rgba(0,0,0,0.12)"
       />
 
-      {/* main barrel body */}
+      {/* barrel body */}
       <rect
         x={2} y={1} width={W - 4} height={H - 4}
         rx={6} ry={6}
@@ -192,20 +301,19 @@ function Thumbwheel({ value, onChange, color }) {
       {/* knurled ridges */}
       <g clipPath={`url(#${clipId})`}>{ridges}</g>
 
-      {/* specular highlight overlay */}
+      {/* specular highlight */}
       <rect
         x={2} y={1} width={W - 4} height={H - 4}
         rx={6} ry={6}
         fill={`url(#${shineId})`}
       />
 
-      {/* top barrel rolloff */}
+      {/* barrel rolloff */}
       <rect
         x={2} y={1} width={W - 4} height={18}
         rx={6} ry={6}
         fill={`url(#${topShadowId})`}
       />
-      {/* bottom barrel rolloff */}
       <rect
         x={2} y={H - 21} width={W - 4} height={18}
         rx={6} ry={6}
@@ -219,7 +327,7 @@ function Thumbwheel({ value, onChange, color }) {
         fill={`url(#${edgeShadowId})`}
       />
 
-      {/* subtle colored tint */}
+      {/* colored tint */}
       <rect
         x={2} y={1} width={W - 4} height={H - 4}
         rx={6} ry={6}
