@@ -1,30 +1,31 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useId } from 'react'
 
 const A_COLOR = '#4a6cf7'
 const B_COLOR = '#ff9500'
 const SUM_COLOR = '#34c759'
 const MAX = 20
 
-const WHEEL_W = 28
-const WHEEL_H = 56
-const RIDGE_GAP = 6 // px between ridges
+const W = 40
+const H = 88
+const RIDGE_SPACING = 7
 
 function clamp(n) {
   return Math.max(0, Math.min(MAX, n))
 }
 
 /**
- * Thumbwheel — like the ridged barrel on a car vent.
- * Horizontal ridges scroll visually as you drag up/down.
+ * Realistic thumbwheel — a 3D cylindrical barrel with knurled ridges
+ * that animate smoothly as you drag up/down.
  */
 function Thumbwheel({ value, onChange, color }) {
+  const id = useId()
   const ref = useRef(null)
   const dragging = useRef(false)
   const startY = useRef(0)
   const startVal = useRef(0)
 
-  // Offset ridges so they appear to scroll with the value
-  const ridgeOffset = (value * RIDGE_GAP) % (RIDGE_GAP * 2)
+  // Smooth pixel offset for ridge animation
+  const ridgePixelOffset = (value * RIDGE_SPACING) % (RIDGE_SPACING * 2)
 
   const onPointerDown = useCallback(
     (e) => {
@@ -54,7 +55,6 @@ function Thumbwheel({ value, onChange, color }) {
     ref.current?.releasePointerCapture(e.pointerId)
   }, [])
 
-  /* scroll wheel */
   const scrollAccum = useRef(0)
   useEffect(() => {
     const el = ref.current
@@ -72,89 +72,160 @@ function Thumbwheel({ value, onChange, color }) {
     return () => el.removeEventListener('wheel', handler)
   }, [value, onChange])
 
-  // Build ridge lines
-  const ridgeCount = Math.ceil(WHEEL_H / RIDGE_GAP) + 2
+  // Build knurled ridges with 3D barrel curvature
+  const ridgeCount = Math.ceil(H / RIDGE_SPACING) + 4
   const ridges = []
   for (let i = 0; i < ridgeCount; i++) {
-    const y = i * RIDGE_GAP - ridgeOffset
-    if (y >= -RIDGE_GAP && y <= WHEEL_H + RIDGE_GAP) {
-      // Ridges near the center are more visible (barrel curvature effect)
-      const distFromCenter = Math.abs(y - WHEEL_H / 2) / (WHEEL_H / 2)
-      const opacity = 0.5 - distFromCenter * 0.3
-      // Ridges near edges are slightly shorter (curvature)
-      const inset = distFromCenter * 3
-      ridges.push(
+    const y = i * RIDGE_SPACING - ridgePixelOffset - RIDGE_SPACING
+    if (y < -RIDGE_SPACING || y > H + RIDGE_SPACING) continue
+
+    // Barrel curvature: distance from vertical center
+    const t = (y - H / 2) / (H / 2) // -1 to 1
+    const curve = Math.sqrt(1 - t * t) // circular cross-section
+
+    // Ridge width narrows toward edges
+    const ridgeInset = (1 - curve) * (W * 0.4)
+    const x1 = 4 + ridgeInset
+    const x2 = W - 4 - ridgeInset
+
+    if (x2 - x1 < 4) continue // too narrow at edges, skip
+
+    // Opacity fades toward edges
+    const opacity = curve * 0.9
+
+    // Each ridge = groove shadow + highlight pair
+    ridges.push(
+      <g key={i} opacity={opacity}>
+        {/* groove (dark) */}
         <line
-          key={i}
-          x1={2 + inset}
-          y1={y}
-          x2={WHEEL_W - 2 - inset}
-          y2={y}
-          stroke={color}
-          strokeWidth={1.5}
+          x1={x1} y1={y} x2={x2} y2={y}
+          stroke="#555"
+          strokeWidth={1.8}
           strokeLinecap="round"
-          opacity={Math.max(0.1, opacity)}
-        />,
-      )
-    }
+        />
+        {/* highlight (light, offset up) */}
+        <line
+          x1={x1 + 0.5} y1={y - 1.5} x2={x2 - 0.5} y2={y - 1.5}
+          stroke="rgba(255,255,255,0.55)"
+          strokeWidth={1}
+          strokeLinecap="round"
+        />
+      </g>,
+    )
   }
+
+  const clipId = `wc${id}`
+  const bodyGradId = `bg${id}`
+  const shineId = `sh${id}`
+  const topShadowId = `ts${id}`
+  const botShadowId = `bs${id}`
+  const edgeShadowId = `es${id}`
 
   return (
     <svg
       ref={ref}
-      width={WHEEL_W}
-      height={WHEEL_H}
-      viewBox={`0 0 ${WHEEL_W} ${WHEEL_H}`}
+      width={W}
+      height={H}
+      viewBox={`0 0 ${W} ${H}`}
       style={s.wheel}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
-      {/* body */}
-      <rect
-        x={0.5}
-        y={0.5}
-        width={WHEEL_W - 1}
-        height={WHEEL_H - 1}
-        rx={4}
-        ry={4}
-        fill="#f0f0ee"
-        stroke="#ccc"
-        strokeWidth={1}
-      />
-      {/* clip ridges to the body */}
-      <clipPath id="wheelClip">
-        <rect x={1} y={1} width={WHEEL_W - 2} height={WHEEL_H - 2} rx={3} ry={3} />
-      </clipPath>
-      <g clipPath="url(#wheelClip)">{ridges}</g>
-      {/* top/bottom edge shadow for barrel depth */}
-      <rect
-        x={1}
-        y={1}
-        width={WHEEL_W - 2}
-        height={8}
-        rx={3}
-        fill="url(#topFade)"
-      />
-      <rect
-        x={1}
-        y={WHEEL_H - 9}
-        width={WHEEL_W - 2}
-        height={8}
-        rx={3}
-        fill="url(#bottomFade)"
-      />
       <defs>
-        <linearGradient id="topFade" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#e0e0de" stopOpacity={0.8} />
-          <stop offset="100%" stopColor="#e0e0de" stopOpacity={0} />
+        {/* 3D cylinder body gradient (horizontal: dark edges, light center) */}
+        <linearGradient id={bodyGradId} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#888" />
+          <stop offset="15%" stopColor="#b0b0b0" />
+          <stop offset="45%" stopColor="#d4d4d4" />
+          <stop offset="55%" stopColor="#d8d8d8" />
+          <stop offset="85%" stopColor="#b0b0b0" />
+          <stop offset="100%" stopColor="#888" />
         </linearGradient>
-        <linearGradient id="bottomFade" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#e0e0de" stopOpacity={0} />
-          <stop offset="100%" stopColor="#e0e0de" stopOpacity={0.8} />
+        {/* specular highlight */}
+        <linearGradient id={shineId} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="white" stopOpacity={0} />
+          <stop offset="35%" stopColor="white" stopOpacity={0} />
+          <stop offset="48%" stopColor="white" stopOpacity={0.25} />
+          <stop offset="52%" stopColor="white" stopOpacity={0.25} />
+          <stop offset="65%" stopColor="white" stopOpacity={0} />
+          <stop offset="100%" stopColor="white" stopOpacity={0} />
         </linearGradient>
+        {/* top/bottom barrel rolloff shadows */}
+        <linearGradient id={topShadowId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#666" stopOpacity={0.7} />
+          <stop offset="100%" stopColor="#666" stopOpacity={0} />
+        </linearGradient>
+        <linearGradient id={botShadowId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#666" stopOpacity={0} />
+          <stop offset="100%" stopColor="#666" stopOpacity={0.7} />
+        </linearGradient>
+        {/* left/right edge darkening */}
+        <linearGradient id={edgeShadowId} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#000" stopOpacity={0.15} />
+          <stop offset="12%" stopColor="#000" stopOpacity={0} />
+          <stop offset="88%" stopColor="#000" stopOpacity={0} />
+          <stop offset="100%" stopColor="#000" stopOpacity={0.15} />
+        </linearGradient>
+        <clipPath id={clipId}>
+          <rect x={2} y={2} width={W - 4} height={H - 4} rx={5} ry={5} />
+        </clipPath>
       </defs>
+
+      {/* drop shadow */}
+      <rect
+        x={2} y={3} width={W - 4} height={H - 4}
+        rx={6} ry={6}
+        fill="rgba(0,0,0,0.12)"
+      />
+
+      {/* main barrel body */}
+      <rect
+        x={2} y={1} width={W - 4} height={H - 4}
+        rx={6} ry={6}
+        fill={`url(#${bodyGradId})`}
+        stroke="#999"
+        strokeWidth={0.5}
+      />
+
+      {/* knurled ridges */}
+      <g clipPath={`url(#${clipId})`}>{ridges}</g>
+
+      {/* specular highlight overlay */}
+      <rect
+        x={2} y={1} width={W - 4} height={H - 4}
+        rx={6} ry={6}
+        fill={`url(#${shineId})`}
+      />
+
+      {/* top barrel rolloff */}
+      <rect
+        x={2} y={1} width={W - 4} height={18}
+        rx={6} ry={6}
+        fill={`url(#${topShadowId})`}
+      />
+      {/* bottom barrel rolloff */}
+      <rect
+        x={2} y={H - 21} width={W - 4} height={18}
+        rx={6} ry={6}
+        fill={`url(#${botShadowId})`}
+      />
+
+      {/* edge darkening */}
+      <rect
+        x={2} y={1} width={W - 4} height={H - 4}
+        rx={6} ry={6}
+        fill={`url(#${edgeShadowId})`}
+      />
+
+      {/* subtle colored tint */}
+      <rect
+        x={2} y={1} width={W - 4} height={H - 4}
+        rx={6} ry={6}
+        fill={color}
+        opacity={0.08}
+      />
     </svg>
   )
 }
@@ -281,7 +352,7 @@ const s = {
     fontWeight: 400,
     color: 'var(--color-muted)',
     fontFamily: "'SF Mono', 'Fira Code', 'Consolas', monospace",
-    marginTop: 12,
+    marginTop: 24,
   },
 
   /* thumbwheel */
@@ -289,6 +360,7 @@ const s = {
     cursor: 'ns-resize',
     touchAction: 'none',
     flexShrink: 0,
+    filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))',
   },
 
   /* dot grid (2 across) */
