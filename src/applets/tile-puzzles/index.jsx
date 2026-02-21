@@ -390,14 +390,14 @@ export default function TilePuzzles() {
         rects.push(
           <rect
             key={`${r}-${c}`}
-            x={PAD + c * CELL + 1}
-            y={PAD + r * CELL + 1}
-            width={CELL - 2}
-            height={CELL - 2}
-            rx={4}
+            x={PAD + c * CELL}
+            y={PAD + r * CELL}
+            width={CELL}
+            height={CELL}
+            rx={piece ? 0 : 4}
             fill={piece ? piece.color : '#f0f0ee'}
-            stroke={piece ? '#fff' : '#ddd'}
-            strokeWidth={piece ? 2 : 1}
+            stroke={piece ? 'none' : '#ddd'}
+            strokeWidth={piece ? 0 : 1}
             opacity={piece ? 0.9 : 1}
             style={{ cursor: piece ? 'pointer' : 'default' }}
             onPointerDown={piece ? (e) => onGridPieceDown(e, pid) : undefined}
