@@ -8,7 +8,7 @@ const TRAY_GAP = 20
 const TRAY_SCALE = 0.55
 const TAP_THRESHOLD = 5
 const DRAG_LIFT_MOUSE = 30
-const DRAG_LIFT_TOUCH = 80 // bigger offset so finger doesn't occlude piece
+const DRAG_LIFT_TOUCH = 120 // bigger offset so finger doesn't occlude piece
 const TRAY_ROW_H = 55 // height of one tray row
 
 /* stable SVG width across all levels so layout never shifts */
