@@ -437,7 +437,7 @@ const s = {
     display: 'flex',
     alignItems: 'flex-start',
     justifyContent: 'center',
-    gap: '1.25rem',
+    gap: '0.75rem',
     marginBottom: '2rem',
   },
   column: {
@@ -445,7 +445,6 @@ const s = {
     flexDirection: 'column',
     alignItems: 'center',
     gap: '0.6rem',
-    minWidth: 110,
   },
   numRow: {
     display: 'flex',
