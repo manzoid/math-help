@@ -130,6 +130,7 @@ export default function TilePuzzles() {
   // Tracks the cumulative turning angle between consecutive displacement
   // vectors.  Linear drags produce ~0 turn; circular sweeps accumulate
   // quickly.  ~180° of accumulated turn triggers a rotation.
+  const rotAnimRef = useRef({ key: 0, fromDeg: 0 }) // drives rotation tween
   const gestureRef = useRef({ points: [], totalTurn: 0, cooldownUntil: 0 })
   const TURN_THRESHOLD = Math.PI // 180° of turning triggers rotation
   const GESTURE_COOLDOWN = 400   // ms before another rotation can fire
@@ -356,6 +357,11 @@ export default function TilePuzzles() {
     if (rot !== 0) {
       const d = dragRef.current
       if (d) {
+        // animate: piece data jumps to new rotation, CSS tweens from old visually
+        rotAnimRef.current = {
+          key: rotAnimRef.current.key + 1,
+          fromDeg: rot > 0 ? -90 : 90,
+        }
         setPieces(prev => prev.map(pp =>
           pp.id === d.pieceId
             ? { ...pp, rotation: (pp.rotation + (rot > 0 ? 1 : 3)) % 4 }
@@ -708,17 +714,25 @@ export default function TilePuzzles() {
     const cx = ((maxC - minC + 1) * CELL) / 2
     const cy = ((maxR - minR + 1) * CELL) / 2
 
+    const anim = rotAnimRef.current
     return (
       <g style={{ pointerEvents: 'none', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }} opacity={0.9}>
-        {cells.map(([r, c], i) => {
-          const dx = drag.svgX + (c - minC) * CELL - cx
-          const dy = drag.svgY + (r - minR) * CELL - cy
-          return (
-            <g key={`drag-${i}`}>
-              {bevelCell(dx, dy, piece.color, CELL)}
-            </g>
-          )
-        })}
+        <g key={anim.key} style={{
+          transformBox: 'fill-box',
+          transformOrigin: 'center',
+          animation: anim.key > 0 ? 'rotSnap 0.18s ease-out' : undefined,
+          '--rot-from': `${anim.fromDeg}deg`,
+        }}>
+          {cells.map(([r, c], i) => {
+            const dx = drag.svgX + (c - minC) * CELL - cx
+            const dy = drag.svgY + (r - minR) * CELL - cy
+            return (
+              <g key={`drag-${i}`}>
+                {bevelCell(dx, dy, piece.color, CELL)}
+              </g>
+            )
+          })}
+        </g>
       </g>
     )
   }
@@ -846,6 +860,10 @@ export default function TilePuzzles() {
             @keyframes sumPop {
               0% { r: 8; opacity: 0.8; stroke-width: 3; }
               100% { r: 36; opacity: 0; stroke-width: 1; }
+            }
+            @keyframes rotSnap {
+              from { transform: rotate(var(--rot-from)); }
+              to   { transform: rotate(0deg); }
             }
           `}</style>
         </defs>
