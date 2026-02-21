@@ -54,14 +54,14 @@ export const SHAPES = {
 /* ---- piece colors (cycle through these) ---- */
 
 export const PIECE_COLORS = [
-  '#4a6cf7', // blue
-  '#ff9500', // orange
-  '#34c759', // green
-  '#af52de', // purple
-  '#ff3b30', // red
-  '#00c7be', // teal
-  '#ff6482', // pink
-  '#8e8e93', // grey
+  '#2962ff', // vivid blue
+  '#ff8800', // vivid orange
+  '#00c853', // vivid green
+  '#aa00ff', // vivid purple
+  '#ff1744', // vivid red
+  '#00bfa5', // vivid teal
+  '#ff4081', // vivid pink
+  '#ffd600', // vivid yellow
 ]
 
 /* ---- level definitions ---- */

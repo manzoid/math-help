@@ -392,6 +392,40 @@ export default function TilePuzzles() {
   /*  SVG rendering                                                  */
   /* ============================================================== */
 
+  /* faceted gem-style cell (Block Blast look) */
+  function bevelCell(cx, cy, color, S) {
+    const B = Math.round(S * 0.13)
+    return (
+      <>
+        <rect x={cx} y={cy} width={S} height={S} fill={color} />
+        {/* top bevel */}
+        <polygon
+          points={`${cx},${cy} ${cx+S},${cy} ${cx+S-B},${cy+B} ${cx+B},${cy+B}`}
+          fill="rgba(255,255,255,0.5)"
+        />
+        {/* left bevel */}
+        <polygon
+          points={`${cx},${cy} ${cx+B},${cy+B} ${cx+B},${cy+S-B} ${cx},${cy+S}`}
+          fill="rgba(255,255,255,0.28)"
+        />
+        {/* right bevel */}
+        <polygon
+          points={`${cx+S},${cy} ${cx+S},${cy+S} ${cx+S-B},${cy+S-B} ${cx+S-B},${cy+B}`}
+          fill="rgba(0,0,0,0.22)"
+        />
+        {/* bottom bevel */}
+        <polygon
+          points={`${cx},${cy+S} ${cx+B},${cy+S-B} ${cx+S-B},${cy+S-B} ${cx+S},${cy+S}`}
+          fill="rgba(0,0,0,0.38)"
+        />
+        {/* center face */}
+        <rect x={cx+B} y={cy+B} width={S-2*B} height={S-2*B} fill={color} />
+        {/* face shine */}
+        <rect x={cx+B} y={cy+B} width={S-2*B} height={S-2*B} fill="url(#faceShine)" />
+      </>
+    )
+  }
+
   function renderGrid() {
     const rects = []
     for (let r = 0; r < gridH; r++) {
@@ -401,34 +435,12 @@ export default function TilePuzzles() {
         const cx = gridX + c * CELL
         const cy = PAD + r * CELL
         if (piece) {
-          const m = 1   // margin between cells
-          const b = 3   // bevel thickness
           rects.push(
             <g key={`${r}-${c}`}
               style={{ cursor: 'pointer' }}
               onPointerDown={(e) => onGridPieceDown(e, pid)}
             >
-              {/* dark shadow base (bottom-right bevel) */}
-              <rect
-                x={cx + m} y={cy + m}
-                width={CELL - m * 2} height={CELL - m * 2}
-                rx={4}
-                fill="rgba(0,0,0,0.3)"
-              />
-              {/* main face, shifted up-left to expose shadow on bottom-right */}
-              <rect
-                x={cx + m} y={cy + m}
-                width={CELL - m * 2 - b} height={CELL - m * 2 - b}
-                rx={4}
-                fill={piece.color}
-              />
-              {/* bright top-left highlight edge */}
-              <rect
-                x={cx + m} y={cy + m}
-                width={CELL - m * 2 - b} height={CELL - m * 2 - b}
-                rx={4}
-                fill="url(#cellBevel)"
-              />
+              {bevelCell(cx, cy, piece.color, CELL)}
             </g>
           )
         } else {
@@ -437,10 +449,10 @@ export default function TilePuzzles() {
               key={`${r}-${c}`}
               x={cx + 1} y={cy + 1}
               width={CELL - 2} height={CELL - 2}
-              rx={4}
-              fill="#f0f0ee"
+              rx={2}
+              fill="#eae9e6"
               stroke="#ddd"
-              strokeWidth={1}
+              strokeWidth={0.5}
             />
           )
         }
@@ -540,18 +552,9 @@ export default function TilePuzzles() {
           )}
           {cells.map(([r, c], i) => {
             const S = CELL * TRAY_SCALE
-            const tm = 0.5
-            const tb = 2
-            const bx = x + c * S + tm
-            const by = y + r * S + tm
             return (
               <g key={i}>
-                <rect x={bx} y={by} width={S - tm * 2} height={S - tm * 2}
-                  rx={3} fill="rgba(0,0,0,0.3)" />
-                <rect x={bx} y={by} width={S - tm * 2 - tb} height={S - tm * 2 - tb}
-                  rx={3} fill={piece.color} />
-                <rect x={bx} y={by} width={S - tm * 2 - tb} height={S - tm * 2 - tb}
-                  rx={3} fill="url(#cellBevel)" />
+                {bevelCell(x + c * S, y + r * S, piece.color, S)}
               </g>
             )
           })}
@@ -614,17 +617,11 @@ export default function TilePuzzles() {
     return (
       <g style={{ pointerEvents: 'none' }} opacity={0.85}>
         {cells.map(([r, c], i) => {
-          const dx = drag.svgX + (c - minC) * CELL - cx + 1
-          const dy = drag.svgY + (r - minR) * CELL - cy + 1
-          const db = 3
+          const dx = drag.svgX + (c - minC) * CELL - cx
+          const dy = drag.svgY + (r - minR) * CELL - cy
           return (
             <g key={`drag-${i}`}>
-              <rect x={dx} y={dy} width={CELL - 2} height={CELL - 2}
-                rx={4} fill="rgba(0,0,0,0.3)" />
-              <rect x={dx} y={dy} width={CELL - 2 - db} height={CELL - 2 - db}
-                rx={4} fill={piece.color} />
-              <rect x={dx} y={dy} width={CELL - 2 - db} height={CELL - 2 - db}
-                rx={4} fill="url(#cellBevel)" />
+              {bevelCell(dx, dy, piece.color, CELL)}
             </g>
           )
         })}
@@ -703,11 +700,25 @@ export default function TilePuzzles() {
           const sumY = PAD + (gridH * CELL) / 2
           return (
             <g style={{ pointerEvents: 'none' }}>
+              {/* subtle glow behind the number */}
               <text
                 x={sumX} y={sumY}
                 textAnchor="middle" dominantBaseline="central"
-                fontSize={44} fontWeight={800}
-                fill={completed ? '#34c759' : '#ddd'}
+                fontSize={46} fontWeight={900}
+                fill={completed ? '#00c853' : 'transparent'}
+                fontFamily="system-ui, sans-serif"
+                style={{ filter: 'blur(8px)' }}
+              >
+                {placedSum}
+              </text>
+              {/* main number with gradient fill */}
+              <text
+                x={sumX} y={sumY}
+                textAnchor="middle" dominantBaseline="central"
+                fontSize={46} fontWeight={900}
+                fill={completed ? 'url(#sumGrad)' : '#d4d4d4'}
+                stroke={completed ? 'rgba(0,0,0,0.15)' : 'none'}
+                strokeWidth={0.5}
                 fontFamily="system-ui, sans-serif"
               >
                 {placedSum}
@@ -716,7 +727,7 @@ export default function TilePuzzles() {
                 <circle
                   cx={sumX} cy={sumY}
                   r={8} fill="none"
-                  stroke="#34c759" strokeWidth={2.5}
+                  stroke="#00c853" strokeWidth={2.5}
                   style={{ animation: 'sumPop 0.6s ease-out forwards' }}
                 />
               )}
@@ -735,12 +746,16 @@ export default function TilePuzzles() {
 
         {/* CSS animations for celebration */}
         <defs>
-          {/* bevel gradient for gem-like cells */}
-          <linearGradient id="cellBevel" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#fff" stopOpacity="0.45" />
-            <stop offset="45%" stopColor="#fff" stopOpacity="0.0" />
-            <stop offset="55%" stopColor="#000" stopOpacity="0.0" />
-            <stop offset="100%" stopColor="#000" stopOpacity="0.25" />
+          {/* subtle shine on center face of each cell */}
+          <linearGradient id="faceShine" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#fff" stopOpacity="0.18" />
+            <stop offset="50%" stopColor="#fff" stopOpacity="0.0" />
+            <stop offset="100%" stopColor="#000" stopOpacity="0.08" />
+          </linearGradient>
+          {/* gradient for completed sum number */}
+          <linearGradient id="sumGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#66ff99" />
+            <stop offset="100%" stopColor="#00a844" />
           </linearGradient>
           <style>{`
             @keyframes sumPop {
