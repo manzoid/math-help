@@ -326,12 +326,14 @@ export default function TilePuzzles() {
 
   /* ---- compute tray positions with wrapping ---- */
   const trayLayout = useMemo(() => {
-    const maxW = svgW - PAD * 2
+    const gridCenterX = gridX + (gridW * CELL) / 2
+    // max row width that fits when centered under the grid
+    const maxW = 2 * Math.min(gridCenterX, svgW - gridCenterX) - PAD
     const GAP = 10
     const TRAY_PAD_Y = 8
 
     // first pass: assign rows
-    const rowItems = [[]] // array of rows, each row is array of { piece, pw, ph }
+    const rowItems = [[]]
     let x = 0
     for (const piece of trayPieces) {
       const cells = getCells(piece)
@@ -347,15 +349,13 @@ export default function TilePuzzles() {
       x += pw + GAP
     }
 
-    // second pass: center each row horizontally, center pieces vertically in row
+    // second pass: center each row under the grid, clamp to SVG bounds
     const positions = []
     let curY = trayY + TRAY_PAD_Y
     for (const row of rowItems) {
       const totalW = row.reduce((s, it) => s + it.pw, 0) + (row.length - 1) * GAP
       const rowH = Math.max(...row.map(it => it.ph), TRAY_ROW_H)
-      // center under the grid, not the full SVG (which includes sum gutter)
-      const gridCenterX = gridX + (gridW * CELL) / 2
-      let curX = gridCenterX - totalW / 2
+      let curX = Math.max(PAD / 2, gridCenterX - totalW / 2)
       for (const { piece, pw, ph } of row) {
         positions.push({
           piece,
