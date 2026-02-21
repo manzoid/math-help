@@ -178,7 +178,7 @@ function Thumbwheel({ value, onChange, color }) {
     const handler = (e) => {
       e.preventDefault()
       scrollAccum.current += e.deltaY
-      if (Math.abs(scrollAccum.current) >= 160) {
+      if (Math.abs(scrollAccum.current) >= 320) {
         const dir = scrollAccum.current < 0 ? 1 : -1
         const newVal = clampVal(value + dir)
         onChange(newVal)
@@ -450,6 +450,7 @@ const s = {
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem',
+    minHeight: 88, // match thumbwheel H so all rows align
   },
   number: {
     fontSize: '2.6rem',
