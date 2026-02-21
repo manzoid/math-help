@@ -6,11 +6,10 @@ const SUM_COLOR = '#34c759'
 const MAX = 20
 
 /**
- * A single number that acts like a dial / drum roller.
+ * A single number that acts like a dial.
  * - drag up/down to change value
  * - scroll wheel to change value
  * - tap chevrons to nudge ±1
- * Shows ghost numbers above/below like a slot machine wheel.
  */
 function Dial({ value, onChange, color }) {
   const ref = useRef(null)
@@ -63,7 +62,6 @@ function Dial({ value, onChange, color }) {
 
   return (
     <div style={s.dialWrapper}>
-      {/* up chevron */}
       <button
         style={s.chevron}
         onClick={() => onChange(clamp(value + 1))}
@@ -83,7 +81,6 @@ function Dial({ value, onChange, color }) {
         <div style={{ ...s.dialValue, color }}>{value}</div>
       </div>
 
-      {/* down chevron */}
       <button
         style={s.chevron}
         onClick={() => onChange(clamp(value - 1))}
@@ -95,18 +92,17 @@ function Dial({ value, onChange, color }) {
   )
 }
 
-function DotRow({ count, color, maxCount }) {
+/** Dots arranged 2-across below a number */
+function DotGrid({ count, color }) {
   return (
-    <div style={s.dotRow}>
-      {Array.from({ length: maxCount }, (_, i) => (
+    <div style={s.dotGrid}>
+      {Array.from({ length: count }, (_, i) => (
         <div
           key={i}
           style={{
             ...s.dot,
-            background: i < count ? color : '#e8e8e6',
-            transform: i < count ? 'scale(1)' : 'scale(0.55)',
-            opacity: i < count ? 1 : 0.3,
-            transition: 'all 0.15s ease',
+            background: color,
+            animation: 'popIn 0.2s ease both',
           }}
         />
       ))}
@@ -125,36 +121,28 @@ export default function AdditionDial() {
         Drag a number up or down &mdash; watch the sum follow!
       </div>
 
-      {/* The equation with dials */}
+      {/* Equation with dials, dots directly below each */}
       <div style={s.equation}>
-        <Dial value={a} onChange={setA} color={A_COLOR} />
-        <span style={s.op}>+</span>
-        <Dial value={b} onChange={setB} color={B_COLOR} />
-        <span style={s.op}>=</span>
-        <div style={{ ...s.sumDisplay, color: SUM_COLOR }}>{sum}</div>
-      </div>
+        {/* first addend column */}
+        <div style={s.column}>
+          <Dial value={a} onChange={setA} color={A_COLOR} />
+          <DotGrid count={a} color={A_COLOR} />
+        </div>
 
-      {/* Dot visualization */}
-      <div style={s.dotsCard}>
-        <div style={s.dotsSection}>
-          <div style={{ ...s.dotsLabel, color: A_COLOR }}>
-            {a}
-          </div>
-          <DotRow count={a} color={A_COLOR} maxCount={MAX} />
+        <span style={s.op}>+</span>
+
+        {/* second addend column */}
+        <div style={s.column}>
+          <Dial value={b} onChange={setB} color={B_COLOR} />
+          <DotGrid count={b} color={B_COLOR} />
         </div>
-        <div style={s.dotsPlusRow}>+</div>
-        <div style={s.dotsSection}>
-          <div style={{ ...s.dotsLabel, color: B_COLOR }}>
-            {b}
-          </div>
-          <DotRow count={b} color={B_COLOR} maxCount={MAX} />
-        </div>
-        <div style={s.dotsPlusRow}>=</div>
-        <div style={s.dotsSection}>
-          <div style={{ ...s.dotsLabel, color: SUM_COLOR }}>
-            {sum}
-          </div>
-          <DotRow count={sum} color={SUM_COLOR} maxCount={MAX * 2} />
+
+        <span style={s.op}>=</span>
+
+        {/* sum column */}
+        <div style={s.column}>
+          <div style={{ ...s.sumDisplay, color: SUM_COLOR }}>{sum}</div>
+          <DotGrid count={sum} color={SUM_COLOR} />
         </div>
       </div>
 
@@ -184,13 +172,19 @@ const s = {
     fontWeight: 500,
   },
 
-  /* equation row */
+  /* equation layout */
   equation: {
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'center',
     gap: '1rem',
     marginBottom: '2rem',
+  },
+  column: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '0.75rem',
   },
   op: {
     fontSize: '2.2rem',
@@ -198,6 +192,7 @@ const s = {
     color: 'var(--color-muted)',
     fontFamily: "'SF Mono', 'Fira Code', 'Consolas', monospace",
     userSelect: 'none',
+    marginTop: 28,
   },
   sumDisplay: {
     fontSize: '2.8rem',
@@ -205,7 +200,10 @@ const s = {
     fontFamily: "'SF Mono', 'Fira Code', 'Consolas', monospace",
     minWidth: 56,
     textAlign: 'center',
-    transition: 'color 0.15s',
+    height: 72,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   /* dial */
@@ -250,43 +248,17 @@ const s = {
     userSelect: 'none',
   },
 
-  /* dots */
-  dotsCard: {
-    background: '#fff',
-    borderRadius: 'var(--radius)',
-    padding: '1.25rem 1.5rem',
-    boxShadow: 'var(--shadow-md)',
-    marginBottom: '1.25rem',
-  },
-  dotsSection: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.75rem',
-  },
-  dotsLabel: {
-    fontWeight: 700,
-    fontSize: '1rem',
-    fontFamily: "'SF Mono', 'Fira Code', 'Consolas', monospace",
-    minWidth: 28,
-    textAlign: 'right',
-  },
-  dotRow: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '4px',
+  /* dot grid (2 across) */
+  dotGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, 18px)',
+    gap: '5px',
+    justifyContent: 'center',
   },
   dot: {
-    width: 14,
-    height: 14,
+    width: 18,
+    height: 18,
     borderRadius: '50%',
-  },
-  dotsPlusRow: {
-    fontSize: '1rem',
-    fontWeight: 600,
-    color: 'var(--color-muted)',
-    textAlign: 'center',
-    padding: '0.2rem 0',
-    marginLeft: 28,
   },
 
   /* insight */
