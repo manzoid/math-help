@@ -132,18 +132,20 @@ export default function TilePuzzles() {
   // vectors.  Linear drags produce ~0 turn; circular sweeps accumulate
   // quickly.  ~180° of accumulated turn triggers a rotation.
   const rotAnimRef = useRef({ key: 0, fromDeg: 0 }) // drives rotation tween
-  const gestureRef = useRef({ points: [], totalTurn: 0, cooldownUntil: 0 })
+  const gestureRef = useRef({ points: [], totalTurn: 0, cooldownUntil: 0, pickupTime: 0 })
   const TURN_THRESHOLD = Math.PI // 180° of turning triggers rotation
   const GESTURE_COOLDOWN = 400   // ms before another rotation can fire
+  const GESTURE_GRACE = 500      // ms after pickup before gesture detection starts
 
   function resetGesture() {
-    gestureRef.current = { points: [], totalTurn: 0, cooldownUntil: 0 }
+    gestureRef.current = { points: [], totalTurn: 0, cooldownUntil: 0, pickupTime: performance.now() }
   }
 
   /** Returns 1 (CW), -1 (CCW), or 0 (no rotation yet) */
   function updateGesture(x, y) {
     const g = gestureRef.current
     const now = performance.now()
+    if (now < g.pickupTime + GESTURE_GRACE) return 0 // ignore jerky pickup
     if (now < g.cooldownUntil) { g.points = []; return 0 }
 
     g.points.push({ x, y })
