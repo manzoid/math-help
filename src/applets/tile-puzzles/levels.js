@@ -114,14 +114,15 @@ export const PIECE_COLORS = [
 const LEVELS = [
   // --- TIER 1: Dominoes (area 6-8) ---
 
-  // Level 1: 3w×2h — three vertical dominoes
-  // ABC
-  // ABC
+  // Level 1: 2w×3h — three horizontal dominoes stacked (no rotation needed)
+  // AA
+  // BB
+  // CC
   {
     id: 1,
     label: '2×3 Bars',
-    gridWidth: 3,
-    gridHeight: 2,
+    gridWidth: 2,
+    gridHeight: 3,
     pieceSize: 2,
     difficulty: 1,
     pieces: [
@@ -130,9 +131,9 @@ const LEVELS = [
       { shape: 'bar2' },
     ],
     canonicalSolutions: [
-      { pieceIndex: 0, row: 0, col: 0, rotation: 1 },
-      { pieceIndex: 1, row: 0, col: 1, rotation: 1 },
-      { pieceIndex: 2, row: 0, col: 2, rotation: 1 },
+      { pieceIndex: 0, row: 0, col: 0, rotation: 0 },
+      { pieceIndex: 1, row: 1, col: 0, rotation: 0 },
+      { pieceIndex: 2, row: 2, col: 0, rotation: 0 },
     ],
   },
 
