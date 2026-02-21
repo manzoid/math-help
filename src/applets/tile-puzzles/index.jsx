@@ -12,7 +12,8 @@ const TRAY_ROW_H = 55 // height of one tray row
 
 /* stable SVG width across all levels so layout never shifts */
 const MAX_GRID_W = Math.max(...LEVELS.map(l => l.gridWidth))
-const STABLE_SVG_W = Math.max(MAX_GRID_W * CELL + PAD * 2, 280)
+const SUM_GUTTER = 70 // space to the right of the grid for the big sum
+const STABLE_SVG_W = MAX_GRID_W * CELL + PAD * 2 + SUM_GUTTER
 
 /* ---- Fisher-Yates shuffle ---- */
 function shuffle(arr) {
@@ -616,13 +617,6 @@ export default function TilePuzzles() {
 
   return (
     <div style={styles.root}>
-      <style>{`
-        @keyframes sumPop {
-          0% { transform: scale(1); }
-          40% { transform: scale(1.3); }
-          100% { transform: scale(1); }
-        }
-      `}</style>
       {/* level navigation + actions */}
       <div style={styles.controls}>
         <button
@@ -661,20 +655,6 @@ export default function TilePuzzles() {
         </button>
       </div>
 
-      {/* running sum */}
-      <div style={styles.sumBar}>
-        <span
-          key={completed ? 'done' : 'wip'}
-          style={{
-            ...styles.sumText,
-            color: completed ? '#34c759' : '#ccc',
-            animation: completed ? 'sumPop 0.4s ease-out' : 'none',
-          }}
-        >
-          {placedSum}
-        </span>
-      </div>
-
       {/* SVG canvas */}
       <svg
         ref={svgRef}
@@ -694,6 +674,33 @@ export default function TilePuzzles() {
         {renderGrid()}
         {renderPieceOutlines()}
         {renderGridNumbers()}
+
+        {/* big running sum to the right of the grid */}
+        {(() => {
+          const sumX = PAD + gridW * CELL + SUM_GUTTER / 2
+          const sumY = PAD + (gridH * CELL) / 2
+          return (
+            <g style={{ pointerEvents: 'none' }}>
+              <text
+                x={sumX} y={sumY}
+                textAnchor="middle" dominantBaseline="central"
+                fontSize={44} fontWeight={800}
+                fill={completed ? '#34c759' : '#ddd'}
+                fontFamily="system-ui, sans-serif"
+              >
+                {placedSum}
+              </text>
+              {completed && (
+                <circle
+                  cx={sumX} cy={sumY}
+                  r={8} fill="none"
+                  stroke="#34c759" strokeWidth={2.5}
+                  style={{ animation: 'sumPop 0.6s ease-out forwards' }}
+                />
+              )}
+            </g>
+          )
+        })()}
 
         {/* tray background */}
         <rect
@@ -728,6 +735,12 @@ export default function TilePuzzles() {
             <stop offset="55%" stopColor="#000" stopOpacity="0.0" />
             <stop offset="100%" stopColor="#000" stopOpacity="0.25" />
           </linearGradient>
+          <style>{`
+            @keyframes sumPop {
+              0% { r: 8; opacity: 0.8; stroke-width: 3; }
+              100% { r: 36; opacity: 0; stroke-width: 1; }
+            }
+          `}</style>
         </defs>
       </svg>
     </div>
@@ -748,17 +761,6 @@ const styles = {
     margin: '0 auto 0.5rem',
     touchAction: 'none',
     cursor: 'default',
-  },
-  sumBar: {
-    textAlign: 'center',
-    margin: '-0.25rem 0 0.25rem',
-  },
-  sumText: {
-    fontSize: '3rem',
-    fontWeight: 800,
-    fontFamily: 'system-ui, sans-serif',
-    transition: 'color 0.3s',
-    lineHeight: 1,
   },
   controls: {
     display: 'flex',
