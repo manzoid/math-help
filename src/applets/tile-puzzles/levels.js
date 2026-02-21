@@ -103,9 +103,9 @@ const LEVELS = [
   },
   {
     id: 3,
-    label: '4×2 Mixed',
-    gridWidth: 4,
-    gridHeight: 2,
+    label: '2×4 Tall',
+    gridWidth: 2,
+    gridHeight: 4,
     pieceSize: 2,
     difficulty: 1,
     pieces: [
@@ -115,10 +115,10 @@ const LEVELS = [
       { shape: 'bar2' },
     ],
     canonicalSolutions: [
-      { pieceIndex: 0, row: 0, col: 0, rotation: 1 },
-      { pieceIndex: 1, row: 0, col: 1, rotation: 1 },
-      { pieceIndex: 2, row: 0, col: 2, rotation: 1 },
-      { pieceIndex: 3, row: 0, col: 3, rotation: 1 },
+      { pieceIndex: 0, row: 0, col: 0, rotation: 0 },
+      { pieceIndex: 1, row: 1, col: 0, rotation: 0 },
+      { pieceIndex: 2, row: 2, col: 0, rotation: 0 },
+      { pieceIndex: 3, row: 3, col: 0, rotation: 0 },
     ],
   },
 
