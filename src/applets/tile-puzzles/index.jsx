@@ -49,18 +49,6 @@ function checkCompletion(grid, pieces) {
   return true
 }
 
-/* ---- find legal placements for a piece ---- */
-function findAllLegalPlacements(grid, cells, w, h) {
-  const placements = []
-  for (let r = 0; r < h; r++) {
-    for (let c = 0; c < w; c++) {
-      if (canPlace(grid, cells, r, c, w, h, null)) {
-        placements.push({ row: r, col: c })
-      }
-    }
-  }
-  return placements
-}
 
 /* ---- initialize pieces for a level ---- */
 function initPieces(level) {
@@ -108,7 +96,6 @@ export default function TilePuzzles() {
   const [drag, _setDrag] = useState(null)
   const dragRef = useRef(null)
   const setDrag = (v) => { dragRef.current = v; _setDrag(v) }
-  const [hintLevel, setHintLevel] = useState(0)
   const [completed, setCompleted] = useState(false)
   const dragStart = useRef(null)
 
@@ -194,7 +181,6 @@ export default function TilePuzzles() {
     setGrid(makeGrid(lv.gridWidth, lv.gridHeight))
     setSelectedId(null)
     setDrag(null)
-    setHintLevel(0)
     setCompleted(false)
   }
 
@@ -203,48 +189,30 @@ export default function TilePuzzles() {
     setGrid(makeGrid(gridW, gridH))
     setSelectedId(null)
     setDrag(null)
-    setHintLevel(0)
     setCompleted(false)
   }
 
-  /* ---- hint system ---- */
-  function onHint() {
-    if (hintLevel >= 3) return
-    const next = hintLevel + 1
-    setHintLevel(next)
-
-    if (next === 3) {
-      // Auto-place one correct piece
-      const canon = level.canonicalSolutions
-      for (const sol of canon) {
-        const piece = pieces[sol.pieceIndex]
-        if (piece && !piece.placed) {
-          // Apply the canonical rotation
-          const rotated = applyRotation(piece.baseShape, sol.rotation)
-          const newPieces = pieces.map(p =>
-            p.id === sol.pieceIndex
-              ? { ...p, rotation: sol.rotation, placed: true, gridRow: sol.row, gridCol: sol.col }
-              : p
-          )
-          const newGrid = grid.map(r => [...r])
-          for (const [r, c] of rotated) {
-            const gr = sol.row + r
-            const gc = sol.col + c
-            if (gr >= 0 && gr < gridH && gc >= 0 && gc < gridW) {
-              newGrid[gr][gc] = sol.pieceIndex
-            }
-          }
-          setPieces(newPieces)
-          setGrid(newGrid)
-
-          if (checkCompletion(newGrid, newPieces)) {
-            setCompleted(true)
-            setCompletedLevels(prev => new Set([...prev, levelIndex]))
-          }
-          break
-        }
+  /* ---- show solution ---- */
+  function showSolution() {
+    const newGrid = makeGrid(gridW, gridH)
+    const newPieces = pieces.map(p => ({ ...p }))
+    for (const sol of level.canonicalSolutions) {
+      const piece = newPieces[sol.pieceIndex]
+      const cells = applyRotation(piece.baseShape, sol.rotation)
+      piece.rotation = sol.rotation
+      piece.placed = true
+      piece.gridRow = sol.row
+      piece.gridCol = sol.col
+      for (const [r, c] of cells) {
+        newGrid[sol.row + r][sol.col + c] = sol.pieceIndex
       }
     }
+    setPieces(newPieces)
+    setGrid(newGrid)
+    setSelectedId(null)
+    setDrag(null)
+    setCompleted(true)
+    setCompletedLevels(prev => new Set([...prev, levelIndex]))
   }
 
   /* ---- pointer handlers ---- */
@@ -622,61 +590,6 @@ export default function TilePuzzles() {
     )
   }
 
-  function renderHints() {
-    if (hintLevel === 0 || selectedId === null) return null
-    const piece = pieces.find(p => p.id === selectedId)
-    if (!piece || piece.placed) return null
-    const cells = getCells(piece)
-
-    if (hintLevel >= 1) {
-      // Show all legal placements
-      const placements = findAllLegalPlacements(grid, cells, gridW, gridH)
-      return placements.map((pl, pi) => (
-        cells.map(([r, c], ci) => (
-          <rect
-            key={`hint-${pi}-${ci}`}
-            x={PAD + (pl.col + c) * CELL + 3}
-            y={PAD + (pl.row + r) * CELL + 3}
-            width={CELL - 6}
-            height={CELL - 6}
-            rx={4}
-            fill={piece.color}
-            opacity={0.15}
-            style={{ pointerEvents: 'none' }}
-          />
-        ))
-      ))
-    }
-    return null
-  }
-
-  function renderCanonicalHint() {
-    if (hintLevel < 2 || selectedId === null) return null
-    const piece = pieces.find(p => p.id === selectedId)
-    if (!piece || piece.placed) return null
-
-    const sol = level.canonicalSolutions.find(s => s.pieceIndex === selectedId)
-    if (!sol) return null
-
-    const cells = applyRotation(piece.baseShape, sol.rotation)
-    return cells.map(([r, c], i) => (
-      <rect
-        key={`canon-${i}`}
-        x={PAD + (sol.col + c) * CELL + 2}
-        y={PAD + (sol.row + r) * CELL + 2}
-        width={CELL - 4}
-        height={CELL - 4}
-        rx={4}
-        fill={piece.color}
-        opacity={0.4}
-        stroke={piece.color}
-        strokeWidth={2}
-        strokeDasharray="4 3"
-        style={{ pointerEvents: 'none' }}
-      />
-    ))
-  }
-
   function renderRunningSum() {
     const sx = PAD + gridW * CELL + SUM_GUTTER / 2
     const sy = PAD + (gridH * CELL) / 2
@@ -757,9 +670,6 @@ export default function TilePuzzles() {
         {/* running sum */}
         {renderRunningSum()}
 
-        {/* hints */}
-        {renderHints()}
-        {renderCanonicalHint()}
 
         {/* tray background */}
         <rect
@@ -842,8 +752,8 @@ export default function TilePuzzles() {
         <button onClick={resetLevel} style={styles.btnSecondary}>
           Reset
         </button>
-        <button onClick={onHint} style={styles.btnSecondary} disabled={hintLevel >= 3}>
-          Hint{hintLevel > 0 ? ` (${hintLevel}/3)` : ''}
+        <button onClick={showSolution} style={styles.btnSecondary}>
+          Show Solution
         </button>
       </div>
     </div>
