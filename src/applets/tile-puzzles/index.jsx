@@ -390,33 +390,33 @@ export default function TilePuzzles() {
         const cx = PAD + c * CELL
         const cy = PAD + r * CELL
         if (piece) {
+          const m = 1   // margin between cells
+          const b = 3   // bevel thickness
           rects.push(
             <g key={`${r}-${c}`}
               style={{ cursor: 'pointer' }}
               onPointerDown={(e) => onGridPieceDown(e, pid)}
             >
-              {/* base cell */}
+              {/* dark shadow base (bottom-right bevel) */}
               <rect
-                x={cx + 0.5} y={cy + 0.5}
-                width={CELL - 1} height={CELL - 1}
-                rx={3}
+                x={cx + m} y={cy + m}
+                width={CELL - m * 2} height={CELL - m * 2}
+                rx={4}
+                fill="rgba(0,0,0,0.3)"
+              />
+              {/* main face, shifted up-left to expose shadow on bottom-right */}
+              <rect
+                x={cx + m} y={cy + m}
+                width={CELL - m * 2 - b} height={CELL - m * 2 - b}
+                rx={4}
                 fill={piece.color}
               />
-              {/* bevel highlight overlay */}
+              {/* bright top-left highlight edge */}
               <rect
-                x={cx + 0.5} y={cy + 0.5}
-                width={CELL - 1} height={CELL - 1}
-                rx={3}
+                x={cx + m} y={cy + m}
+                width={CELL - m * 2 - b} height={CELL - m * 2 - b}
+                rx={4}
                 fill="url(#cellBevel)"
-              />
-              {/* thin seam groove */}
-              <rect
-                x={cx + 0.5} y={cy + 0.5}
-                width={CELL - 1} height={CELL - 1}
-                rx={3}
-                fill="none"
-                stroke="rgba(0,0,0,0.15)"
-                strokeWidth={1}
               />
             </g>
           )
@@ -530,18 +530,18 @@ export default function TilePuzzles() {
           )}
           {cells.map(([r, c], i) => {
             const S = CELL * TRAY_SCALE
-            const bx = x + c * S + 0.5
-            const by = y + r * S + 0.5
-            const bw = S - 1
-            const bh = S - 1
+            const tm = 0.5
+            const tb = 2
+            const bx = x + c * S + tm
+            const by = y + r * S + tm
             return (
               <g key={i}>
-                <rect x={bx} y={by} width={bw} height={bh} rx={2}
-                  fill={piece.color} />
-                <rect x={bx} y={by} width={bw} height={bh} rx={2}
-                  fill="url(#cellBevel)" />
-                <rect x={bx} y={by} width={bw} height={bh} rx={2}
-                  fill="none" stroke="rgba(0,0,0,0.15)" strokeWidth={0.75} />
+                <rect x={bx} y={by} width={S - tm * 2} height={S - tm * 2}
+                  rx={3} fill="rgba(0,0,0,0.3)" />
+                <rect x={bx} y={by} width={S - tm * 2 - tb} height={S - tm * 2 - tb}
+                  rx={3} fill={piece.color} />
+                <rect x={bx} y={by} width={S - tm * 2 - tb} height={S - tm * 2 - tb}
+                  rx={3} fill="url(#cellBevel)" />
               </g>
             )
           })}
@@ -604,16 +604,17 @@ export default function TilePuzzles() {
     return (
       <g style={{ pointerEvents: 'none' }} opacity={0.85}>
         {cells.map(([r, c], i) => {
-          const dx = drag.svgX + (c - minC) * CELL - cx + 0.5
-          const dy = drag.svgY + (r - minR) * CELL - cy + 0.5
+          const dx = drag.svgX + (c - minC) * CELL - cx + 1
+          const dy = drag.svgY + (r - minR) * CELL - cy + 1
+          const db = 3
           return (
             <g key={`drag-${i}`}>
-              <rect x={dx} y={dy} width={CELL - 1} height={CELL - 1}
-                rx={3} fill={piece.color} />
-              <rect x={dx} y={dy} width={CELL - 1} height={CELL - 1}
-                rx={3} fill="url(#cellBevel)" />
-              <rect x={dx} y={dy} width={CELL - 1} height={CELL - 1}
-                rx={3} fill="none" stroke="rgba(0,0,0,0.15)" strokeWidth={1} />
+              <rect x={dx} y={dy} width={CELL - 2} height={CELL - 2}
+                rx={4} fill="rgba(0,0,0,0.3)" />
+              <rect x={dx} y={dy} width={CELL - 2 - db} height={CELL - 2 - db}
+                rx={4} fill={piece.color} />
+              <rect x={dx} y={dy} width={CELL - 2 - db} height={CELL - 2 - db}
+                rx={4} fill="url(#cellBevel)" />
             </g>
           )
         })}
