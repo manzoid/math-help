@@ -39,6 +39,13 @@ const applets = [
     tags: ['addition', 'equality', 'ages 4-6'],
     component: lazy(() => import('./addition-balance/index.jsx')),
   },
+  {
+    slug: 'addition-handwriting',
+    title: 'Handwriting Practice',
+    subtitle: 'Write your answer and the browser recognizes your handwriting',
+    tags: ['addition', 'handwriting', 'ages 4-6'],
+    component: lazy(() => import('./addition-handwriting/index.jsx')),
+  },
 ]
 
 export default applets
