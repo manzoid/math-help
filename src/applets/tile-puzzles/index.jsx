@@ -390,7 +390,6 @@ export default function TilePuzzles() {
         const cx = PAD + c * CELL
         const cy = PAD + r * CELL
         if (piece) {
-          const inset = 3
           rects.push(
             <g key={`${r}-${c}`}
               style={{ cursor: 'pointer' }}
@@ -398,17 +397,26 @@ export default function TilePuzzles() {
             >
               {/* base cell */}
               <rect
-                x={cx + inset} y={cy + inset}
-                width={CELL - inset * 2} height={CELL - inset * 2}
-                rx={5}
+                x={cx + 0.5} y={cy + 0.5}
+                width={CELL - 1} height={CELL - 1}
+                rx={3}
                 fill={piece.color}
               />
               {/* bevel highlight overlay */}
               <rect
-                x={cx + inset} y={cy + inset}
-                width={CELL - inset * 2} height={CELL - inset * 2}
-                rx={5}
+                x={cx + 0.5} y={cy + 0.5}
+                width={CELL - 1} height={CELL - 1}
+                rx={3}
                 fill="url(#cellBevel)"
+              />
+              {/* thin seam groove */}
+              <rect
+                x={cx + 0.5} y={cy + 0.5}
+                width={CELL - 1} height={CELL - 1}
+                rx={3}
+                fill="none"
+                stroke="rgba(0,0,0,0.15)"
+                strokeWidth={1}
               />
             </g>
           )
