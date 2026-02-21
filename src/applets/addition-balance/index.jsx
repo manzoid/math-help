@@ -219,12 +219,8 @@ export default function AdditionBalance() {
 
       if (tray) {
         addToTray(tray)
-      } else if (hitSupply(p.y)) {
-        // Dropped on supply area — weight returns to supply (removed from tray)
-      } else if (dragging.source !== 'supply') {
-        // Dropped in empty space — snap back to source tray
-        addToTray(dragging.source)
       }
+      // Dropped anywhere else — weight falls back to supply
 
       setDragging(null)
     },
