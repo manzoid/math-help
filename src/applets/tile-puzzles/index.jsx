@@ -8,7 +8,7 @@ const TRAY_H = 120
 const TRAY_GAP = 20
 const TRAY_SCALE = 0.55
 const TAP_THRESHOLD = 5
-const DRAG_LIFT = 90 // lift drag piece above finger
+const DRAG_LIFT = 45 // lift drag piece above finger
 const SUM_GUTTER = 80 // space to the right of grid for the running sum
 
 /* ---- Fisher-Yates shuffle ---- */
