@@ -107,8 +107,12 @@ function Thumbwheel({ value, onChange, color }) {
   )
 
   const startMomentum = useCallback(() => {
-    const friction = 0.94
+    const friction = 0.75
     const minVelocity = 0.02
+    const maxVelocity = 0.6
+
+    // Cap velocity so a fast flick only moves a step or two
+    velocity.current = Math.max(-maxVelocity, Math.min(maxVelocity, velocity.current))
 
     let lastFrame = performance.now()
 
