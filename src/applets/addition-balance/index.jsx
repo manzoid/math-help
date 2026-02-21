@@ -11,8 +11,8 @@ const B_COLOR = '#ff9500'
 const SUM_COLOR = '#34c759'
 const MAX_WEIGHTS = 12
 
-const CANVAS_W = 560
-const CANVAS_H = 460
+const CANVAS_W = 520
+const CANVAS_H = 420
 
 const WEIGHT_R = 9
 const TRAY_INNER_W = 80
@@ -160,8 +160,8 @@ export default function AdditionBalance() {
 
     /* ---- layout ---- */
     const pivotX = CANVAS_W / 2
-    const pivotY = 90
-    const postH = 180
+    const pivotY = 80
+    const postH = 160
     const baseW = 100
     const baseH = 12
 
@@ -178,31 +178,22 @@ export default function AdditionBalance() {
     })
 
     /* ---- beam ---- */
-    const beamHalf = 170   // half-length
+    const beamHalf = 155   // half-length
     const beamThick = 7
+    // Beam is kinematic — we drive its angle from weight counts, not physics torque.
+    // This keeps the educational concept (count equality = balanced) while still
+    // having real physics for the weights inside the trays.
     const beam = Bodies.rectangle(pivotX, pivotY, beamHalf * 2, beamThick, {
-      density: 0.002,
-      friction: 0.5,
+      isStatic: true,
       render: { fillStyle: '#666' },
-      collisionFilter: { category: 0, mask: 0 }, // beam doesn't collide with anything
+      collisionFilter: { category: 0, mask: 0 },
     })
     beamRef.current = beam
 
-    const pivotConstraint = Constraint.create({
-      pointA: { x: pivotX, y: pivotY },
-      bodyB: beam,
-      pointB: { x: 0, y: 0 },
-      stiffness: 1,
-      length: 0,
-      render: { visible: false },
-    })
-
-    /* ---- tray positions (relative to beam center) ---- */
-    // Left side: tray A (outer) and tray B (inner)
-    // Right side: tray Sum
-    const attachA = -beamHalf * 0.85   // -144.5
-    const attachB = -beamHalf * 0.35   // -59.5
-    const attachS = beamHalf * 0.85    // +144.5
+    /* ---- tray attachment points (relative to beam center) ---- */
+    const attachA = -beamHalf * 0.85
+    const attachB = -beamHalf * 0.32
+    const attachS = beamHalf * 0.82
 
     const chainLen = 90
 
@@ -214,29 +205,29 @@ export default function AdditionBalance() {
     trayBodiesRef.current = { a: trayABody, b: trayBBody, sum: traySBody }
 
     /* ---- chain constraints (beam → tray) ---- */
+    // Two-point attachment for stability; rendered manually (not by matter-js)
+    const allChains = []  // save references for custom drawing
     function makeChain(beamOffsetX, trayBody) {
-      // Two-point attachment for stability (left and right of tray top)
       const spread = TRAY_INNER_W / 3
       const c1 = Constraint.create({
         bodyA: beam,
         pointA: { x: beamOffsetX - spread / 2, y: beamThick / 2 },
         bodyB: trayBody,
         pointB: { x: -spread / 2, y: -TRAY_WALL_H / 2 },
-        stiffness: 0.8,
-        damping: 0.1,
+        stiffness: 1,
         length: chainLen - TRAY_WALL_H / 2,
-        render: { strokeStyle: '#bbb', lineWidth: 1.5 },
+        render: { visible: false },
       })
       const c2 = Constraint.create({
         bodyA: beam,
         pointA: { x: beamOffsetX + spread / 2, y: beamThick / 2 },
         bodyB: trayBody,
         pointB: { x: spread / 2, y: -TRAY_WALL_H / 2 },
-        stiffness: 0.8,
-        damping: 0.1,
+        stiffness: 1,
         length: chainLen - TRAY_WALL_H / 2,
-        render: { strokeStyle: '#bbb', lineWidth: 1.5 },
+        render: { visible: false },
       })
+      allChains.push(c1, c2)
       return [c1, c2]
     }
 
@@ -263,7 +254,7 @@ export default function AdditionBalance() {
 
     /* ---- add to world ---- */
     Composite.add(world, [
-      base, post, beam, pivotConstraint,
+      base, post, beam,
       trayABody, trayBBody, traySBody,
       ...chainsA, ...chainsB, ...chainsS,
       floor, wallL, wallR,
@@ -329,22 +320,24 @@ export default function AdditionBalance() {
       }
     })
 
-    /* ---- per-frame: clamp beam angle + damping ---- */
+    /* ---- per-frame: drive beam angle from weight counts ---- */
+    let beamAngleVel = 0
     Events.on(engine, 'beforeUpdate', () => {
-      const maxAngle = 0.35
-      if (beam.angle > maxAngle) {
-        Body.setAngle(beam, maxAngle)
-        Body.setAngularVelocity(beam, Math.min(beam.angularVelocity, 0))
-      }
-      if (beam.angle < -maxAngle) {
-        Body.setAngle(beam, -maxAngle)
-        Body.setAngularVelocity(beam, Math.max(beam.angularVelocity, 0))
-      }
+      // Count-based balance (the educational concept)
+      const aC = countWeightsInTray(engine, 'a')
+      const bC = countWeightsInTray(engine, 'b')
+      const sC = countWeightsInTray(engine, 'sum')
+      const diff = (aC + bC) - sC
+      const maxAngle = 0.28
+      const targetAngle = Math.max(-maxAngle, Math.min(maxAngle, diff * 0.055))
 
-      // Angular damping for gentle settling
-      Body.setAngularVelocity(beam, beam.angularVelocity * 0.97)
+      // Spring-damper towards target
+      const stiffness = 0.03
+      const damping = 0.75
+      beamAngleVel = beamAngleVel * damping + (targetAngle - beam.angle) * stiffness
+      Body.setAngle(beam, beam.angle + beamAngleVel)
 
-      // Clean up weights that somehow escape
+      // Clean up escaped weights
       for (const b of Composite.allBodies(world)) {
         if (b.label === 'weight' && (b.position.y > CANVAS_H + 80 || b.position.x < -50 || b.position.x > CANVAS_W + 50)) {
           Composite.remove(world, b)
@@ -366,6 +359,20 @@ export default function AdditionBalance() {
       ctx.closePath()
       ctx.fillStyle = '#777'
       ctx.fill()
+
+      // Chain lines (drawn manually for clean look)
+      ctx.strokeStyle = '#bbb'
+      ctx.lineWidth = 1.5
+      ctx.setLineDash([4, 3])
+      for (const c of allChains) {
+        const pA = Constraint.pointAWorld(c)
+        const pB = Constraint.pointBWorld(c)
+        ctx.beginPath()
+        ctx.moveTo(pA.x, pA.y)
+        ctx.lineTo(pB.x, pB.y)
+        ctx.stroke()
+      }
+      ctx.setLineDash([])
 
       // Tray labels
       const trays = [
