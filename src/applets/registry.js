@@ -45,6 +45,13 @@ const applets = [
     subtitle: 'Drag and rotate pieces to fill the grid and reach the target sum',
     component: lazy(() => import('./tile-puzzles/index.jsx')),
   },
+  {
+    slug: 'puff-merge',
+    title: 'Puff Merge',
+    subtitle: 'Drag puffs together — they add up when they touch',
+    tags: ['addition', 'ages 4-6'],
+    component: lazy(() => import('./puff-merge/index.jsx')),
+  },
 ]
 
 export default applets
