@@ -42,7 +42,7 @@ const applets = [
   {
     slug: 'tile-puzzles',
     title: 'Tile Puzzles',
-    subtitle: 'Fill the grid — swirl to rotate pieces, drag to place them',
+    subtitle: 'Drag and rotate pieces to fill the grid',
     component: lazy(() => import('./tile-puzzles/index.jsx')),
   },
 ]
