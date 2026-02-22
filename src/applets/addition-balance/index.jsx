@@ -29,24 +29,62 @@ const ATTACH = { a: -BEAM_HALF * 0.85, b: -BEAM_HALF * 0.32, sum: BEAM_HALF * 0.
 /* ---- id generator ---- */
 let _nid = 100
 
-function makeDefaults() {
+/* ---- problem set ---- */
+const PROBLEMS = [
+  // Tier 1 — Discover (find the sum)
+  { a: 1, b: 1, unknown: 'sum' },
+  { a: 2, b: 1, unknown: 'sum' },
+  { a: 2, b: 2, unknown: 'sum' },
+  { a: 3, b: 2, unknown: 'sum' },
+  { a: 4, b: 2, unknown: 'sum' },
+  { a: 3, b: 4, unknown: 'sum' },
+  { a: 5, b: 3, unknown: 'sum' },
+  // Tier 2 — Find the addend
+  { a: null, b: 2, sum: 4,  unknown: 'a' },
+  { a: 3, b: null, sum: 7,  unknown: 'b' },
+  { a: null, b: 4, sum: 9,  unknown: 'a' },
+  // Tier 3 — Larger sums + mixed
+  { a: 6, b: 3, unknown: 'sum' },
+  { a: 5, b: 5, unknown: 'sum' },
+  { a: null, b: 5, sum: 9,  unknown: 'a' },
+  { a: 6, b: null, sum: 10, unknown: 'b' },
+  { a: 7, b: 3, unknown: 'sum' },
+]
+
+
+function makeWeightsForProblem(p) {
   const out = []
-  for (let i = 0; i < 3; i++) out.push({ id: _nid++, tray: 'a' })
-  for (let i = 0; i < 2; i++) out.push({ id: _nid++, tray: 'b' })
-  for (let i = 0; i < 5; i++) out.push({ id: _nid++, tray: 'sum' })
+  const aCount   = p.unknown === 'a'   ? 0 : p.a
+  const bCount   = p.unknown === 'b'   ? 0 : p.b
+  const sumCount = p.unknown === 'sum' ? 0 : p.sum
+  for (let i = 0; i < aCount;   i++) out.push({ id: _nid++, tray: 'a',   locked: true })
+  for (let i = 0; i < bCount;   i++) out.push({ id: _nid++, tray: 'b',   locked: true })
+  for (let i = 0; i < sumCount; i++) out.push({ id: _nid++, tray: 'sum', locked: true })
   return out
+}
+
+function problemLabel(p) {
+  return {
+    a:   p.unknown === 'a'   ? '?' : String(p.a),
+    b:   p.unknown === 'b'   ? '?' : String(p.b),
+    sum: p.unknown === 'sum' ? '?' : String(p.sum),
+  }
 }
 
 /* ================================================================ */
 
 export default function AdditionBalance() {
   const svgRef = useRef(null)
-  const [weights, setWeights] = useState(makeDefaults)
+  const [problemIdx, setProblemIdx] = useState(0)
+  const [weights, setWeights] = useState(() => makeWeightsForProblem(PROBLEMS[0]))
   const [drag, setDrag]       = useState(null)   // { id, x, y }
+  const [solved, setSolved]   = useState(false)
   const [angle, setAngle]     = useState(0)
   const angleRef = useRef(0)
   const velRef   = useRef(0)
   const rafRef   = useRef(null)
+
+  const problem = PROBLEMS[problemIdx]
 
   /* ---- weight counts per tray ---- */
   const counts = useMemo(() => {
@@ -79,6 +117,15 @@ export default function AdditionBalance() {
     rafRef.current = requestAnimationFrame(tick)
     return () => { active = false; cancelAnimationFrame(rafRef.current) }
   }, [counts.a, counts.b, counts.sum])
+
+  /* ---- derived ---- */
+  const leftTotal = counts.a + counts.b
+  const balanced  = leftTotal === counts.sum && leftTotal > 0
+
+  /* ---- latch solved once balanced ---- */
+  useEffect(() => {
+    if (balanced && !solved) setSolved(true)
+  }, [balanced, solved])
 
   /* ---- tray positions (derived from beam angle each frame) ---- */
   const trayPos = useMemo(() => {
@@ -116,17 +163,20 @@ export default function AdditionBalance() {
   }
 
   function hitTray(sx, sy) {
-    for (const [label, tp] of Object.entries(trayPos)) {
-      const hw = TRAY_W / 2 + 15
-      if (sx > tp.x - hw && sx < tp.x + hw &&
-          sy > tp.y - TRAY_WALL_H - 100 && sy < tp.y + 15)
-        return label
-    }
+    // Only the unknown tray is a valid drop target
+    const label = problem.unknown
+    const tp = trayPos[label]
+    const hw = TRAY_W / 2 + 15
+    if (sx > tp.x - hw && sx < tp.x + hw &&
+        sy > tp.y - TRAY_WALL_H - 100 && sy < tp.y + 15)
+      return label
     return null
   }
 
   /* ---- pointer handlers ---- */
   function onWeightDown(e, id) {
+    const w = weights.find(w => w.id === id)
+    if (w?.locked) return
     e.stopPropagation()
     svgRef.current.setPointerCapture(e.pointerId)
     const p = toSVG(e.clientX, e.clientY)
@@ -161,13 +211,23 @@ export default function AdditionBalance() {
   }
 
   function onReset() {
-    setWeights(makeDefaults())
+    setWeights(makeWeightsForProblem(problem))
+    setSolved(false)
     setDrag(null)
   }
 
-  /* ---- derived ---- */
-  const leftTotal = counts.a + counts.b
-  const balanced  = leftTotal === counts.sum
+  function onNext() {
+    if (problemIdx >= PROBLEMS.length - 1) return
+    const nextIdx = problemIdx + 1
+    setProblemIdx(nextIdx)
+    setWeights(makeWeightsForProblem(PROBLEMS[nextIdx]))
+    setSolved(false)
+    setDrag(null)
+  }
+
+  const labels = problemLabel(problem)
+  const unknownTrayName = problem.unknown === 'sum' ? 'Sum' : problem.unknown.toUpperCase()
+  const isLastProblem   = problemIdx === PROBLEMS.length - 1
 
   /* ============================================================== */
   /*  SVG rendering helpers                                         */
@@ -189,7 +249,8 @@ export default function AdditionBalance() {
     const color = COLORS[label]
     const { x, y, ax, ay } = tp
     const hw = TRAY_W / 2
-    const spread = hw * 0.7          // chain attachment spread on tray top
+    const spread   = hw * 0.7
+    const isTarget = label === problem.unknown
 
     return (
       <g key={label}>
@@ -202,15 +263,15 @@ export default function AdditionBalance() {
         {/* walls */}
         <rect x={x - hw - TRAY_WALL_T} y={y - TRAY_WALL_H}
           width={TRAY_WALL_T} height={TRAY_WALL_H}
-          fill={color} opacity={0.3} rx={1} />
+          fill={color} opacity={isTarget ? 0.55 : 0.3} rx={1} />
         <rect x={x + hw} y={y - TRAY_WALL_H}
           width={TRAY_WALL_T} height={TRAY_WALL_H}
-          fill={color} opacity={0.3} rx={1} />
+          fill={color} opacity={isTarget ? 0.55 : 0.3} rx={1} />
 
         {/* floor */}
         <rect x={x - hw - TRAY_WALL_T} y={y - TRAY_FLOOR_H / 2}
           width={TRAY_W + TRAY_WALL_T * 2} height={TRAY_FLOOR_H}
-          fill={color} opacity={0.45} rx={1} />
+          fill={color} opacity={isTarget ? 0.7 : 0.45} rx={1} />
 
         {/* label below tray */}
         <text x={x} y={y + 16} textAnchor="middle" fill={color}
@@ -247,7 +308,11 @@ export default function AdditionBalance() {
         <circle key={w.id} cx={cx} cy={cy} r={WEIGHT_R}
           fill={isDragging ? '#aaa' : (COLORS[w.tray] || '#999')}
           stroke="#fff" strokeWidth={1.5}
-          style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+          opacity={w.locked ? 0.7 : 1}
+          style={{
+            cursor: w.locked ? 'default' : (isDragging ? 'grabbing' : 'grab'),
+            pointerEvents: w.locked ? 'none' : 'auto',
+          }}
           onPointerDown={e => onWeightDown(e, w.id)}
         />
       )
@@ -269,7 +334,7 @@ export default function AdditionBalance() {
         <text x={W / 2} y={sy + 11} textAnchor="middle" fill="#bbb"
           fontSize={9} fontWeight={500} fontFamily="system-ui, sans-serif"
           style={{ pointerEvents: 'none' }}>
-          SUPPLY — tap to grab, drag onto a tray
+          {`SUPPLY — drag onto the ${unknownTrayName} tray`}
         </text>
         {Array.from({ length: dots }, (_, i) => (
           <circle key={i} cx={startX + i * gap} cy={H - 18}
@@ -289,6 +354,18 @@ export default function AdditionBalance() {
 
   return (
     <div style={styles.root}>
+      {/* problem header row */}
+      <div style={styles.problemHeader}>
+        <span style={styles.problemCounter}>Problem {problemIdx + 1} / {PROBLEMS.length}</span>
+        <span style={styles.goalEquation}>
+          <span style={{ color: A_COLOR }}>{labels.a}</span>
+          <span style={styles.eqOp}> + </span>
+          <span style={{ color: B_COLOR }}>{labels.b}</span>
+          <span style={styles.eqOp}> = </span>
+          <span style={{ color: SUM_COLOR }}>{labels.sum}</span>
+        </span>
+      </div>
+
       {/* equation bar */}
       <div style={{
         ...styles.equation,
@@ -345,34 +422,57 @@ export default function AdditionBalance() {
         {renderSupply()}
       </svg>
 
-      {/* reset */}
-      <div style={{ textAlign: 'center', marginBottom: '0.6rem' }}>
-        <button onClick={onReset} style={styles.resetBtn}>Reset weights</button>
+      {/* buttons row */}
+      <div style={styles.buttonRow}>
+        <button onClick={onReset} style={styles.resetBtn}>Reset</button>
+        {solved && !isLastProblem && (
+          <button onClick={onNext} style={styles.nextBtn}>Next →</button>
+        )}
+        {solved && isLastProblem && (
+          <span style={styles.allDone}>All done!</span>
+        )}
       </div>
 
       {/* insight */}
       <div style={styles.insight}>
-        <div style={styles.insightTitle}>The pattern</div>
-        <p style={styles.insightText}>
-          The left side holds{' '}
-          <strong style={{ color: A_COLOR }}>{counts.a}</strong>
-          {' + '}
-          <strong style={{ color: B_COLOR }}>{counts.b}</strong>
-          {' = '}
-          <strong>{leftTotal}</strong> total weights.
-          {balanced ? (
-            <>
-              {' '}The right side also holds{' '}
-              <strong style={{ color: SUM_COLOR }}>{counts.sum}</strong>,
-              so the scale balances perfectly!
-            </>
-          ) : (
-            <>
-              {' '}Try getting the right side to{' '}
-              <strong>{leftTotal}</strong> to make it balance.
-            </>
-          )}
-        </p>
+        {!solved ? (
+          <>
+            <div style={styles.insightTitle}>The challenge</div>
+            <p style={styles.insightText}>
+              {problem.unknown === 'sum' ? (
+                <>
+                  The left side has{' '}
+                  <strong style={{ color: A_COLOR }}>{labels.a}</strong>
+                  {' + '}
+                  <strong style={{ color: B_COLOR }}>{labels.b}</strong>
+                  {' weights. Drag weights onto the '}
+                  <strong style={{ color: SUM_COLOR }}>Sum</strong>
+                  {' tray until the scale balances.'}
+                </>
+              ) : (
+                <>
+                  The sum is{' '}
+                  <strong style={{ color: SUM_COLOR }}>{labels.sum}</strong>.
+                  {' Drag weights onto the '}
+                  <strong style={{ color: COLORS[problem.unknown] }}>{unknownTrayName}</strong>
+                  {' tray to find the missing number.'}
+                </>
+              )}
+            </p>
+          </>
+        ) : (
+          <>
+            <div style={{ ...styles.insightTitle, color: SUM_COLOR }}>Nice work!</div>
+            <p style={styles.insightText}>
+              <strong style={{ color: A_COLOR }}>{counts.a}</strong>
+              {' + '}
+              <strong style={{ color: B_COLOR }}>{counts.b}</strong>
+              {' = '}
+              <strong style={{ color: SUM_COLOR }}>{counts.sum}</strong>
+              {' — the scale balances perfectly!'}
+            </p>
+          </>
+        )}
       </div>
     </div>
   )
@@ -384,6 +484,27 @@ const styles = {
   root: {
     userSelect: 'none',
     WebkitUserSelect: 'none',
+  },
+  problemHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '0.3rem 0.5rem 0.1rem',
+    marginBottom: '0.1rem',
+  },
+  problemCounter: {
+    fontSize: '0.75rem',
+    fontWeight: 600,
+    color: 'var(--color-muted)',
+    fontFamily: 'system-ui, sans-serif',
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+  },
+  goalEquation: {
+    fontSize: '1.1rem',
+    fontWeight: 700,
+    fontFamily: "'SF Mono', 'Fira Code', 'Consolas', monospace",
+    letterSpacing: '-0.02em',
   },
   svg: {
     width: '100%',
@@ -411,6 +532,14 @@ const styles = {
     color: 'var(--color-muted)',
     fontFamily: 'inherit',
   },
+  buttonRow: {
+    textAlign: 'center',
+    marginBottom: '0.6rem',
+    display: 'flex',
+    gap: '0.5rem',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   resetBtn: {
     background: 'var(--color-accent-light, #e8edff)',
     color: 'var(--color-accent, #4a6cf7)',
@@ -420,6 +549,22 @@ const styles = {
     fontSize: '0.85rem',
     fontWeight: 600,
     cursor: 'pointer',
+  },
+  nextBtn: {
+    background: '#34c759',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '8px',
+    padding: '0.4rem 1.25rem',
+    fontSize: '0.85rem',
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
+  allDone: {
+    fontSize: '0.95rem',
+    fontWeight: 700,
+    color: SUM_COLOR,
+    fontFamily: 'system-ui, sans-serif',
   },
   insight: {
     background: '#fff',

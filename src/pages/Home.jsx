@@ -46,19 +46,6 @@ const styles = {
     color: 'var(--color-muted)',
     marginBottom: '0.75rem',
   },
-  tags: {
-    display: 'flex',
-    gap: '0.4rem',
-    flexWrap: 'wrap',
-  },
-  tag: {
-    fontSize: '0.7rem',
-    background: 'var(--color-accent-light)',
-    color: 'var(--color-accent)',
-    padding: '0.15rem 0.5rem',
-    borderRadius: '999px',
-    fontWeight: 500,
-  },
 }
 
 export default function Home() {
@@ -88,13 +75,6 @@ export default function Home() {
           >
             <div style={styles.cardTitle}>{applet.title}</div>
             {applet.subtitle && <div style={styles.cardSub}>{applet.subtitle}</div>}
-            {applet.tags?.length > 0 && (
-              <div style={styles.tags}>
-                {applet.tags.map((t) => (
-                  <span key={t} style={styles.tag}>{t}</span>
-                ))}
-              </div>
-            )}
           </Link>
         ))}
       </div>

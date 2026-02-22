@@ -19,13 +19,6 @@ const applets = [
     component: lazy(() => import('./addition-patterns/index.jsx')),
   },
   {
-    slug: 'addition-lockstep',
-    title: 'Lockstep Addition',
-    subtitle: 'Slide an addend and watch the sum move with it',
-    tags: ['addition', 'patterns', 'ages 4-6'],
-    component: lazy(() => import('./addition-lockstep/index.jsx')),
-  },
-  {
     slug: 'addition-dial',
     title: 'Dial Addition',
     subtitle: 'Dial either addend up or down and the sum follows',
@@ -41,7 +34,7 @@ const applets = [
   },
   {
     slug: 'addition-handwriting',
-    title: 'Handwriting Practice',
+    title: 'Write the Answer',
     subtitle: 'Write your answer and the browser recognizes your handwriting',
     tags: ['addition', 'handwriting', 'ages 4-6'],
     component: lazy(() => import('./addition-handwriting/index.jsx')),
@@ -49,6 +42,7 @@ const applets = [
   {
     slug: 'tile-puzzles',
     title: 'Tile Puzzles',
+    subtitle: 'Drag and rotate pieces to fill the grid and reach the target sum',
     component: lazy(() => import('./tile-puzzles/index.jsx')),
   },
 ]
