@@ -14,7 +14,7 @@ const COLOR_LIST = [
 ]
 const GATE_W = 55  // width of gate wall on right edge
 
-function radiusFor(v) { return Math.min(Math.max(28, 14 + v * 6), 110) }
+function radiusFor(v) { return Math.min(Math.max(36, 14 + v * 6), 110) }
 function colorFor(v) { return COLOR_LIST[(v - 1) % COLOR_LIST.length] }
 
 // Stable per-value pseudo-random (0–1)
