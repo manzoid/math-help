@@ -529,6 +529,8 @@ export class GameScene extends Phaser.Scene {
                   showNext: true,
                   isLast,
                 })
+                // Auto-advance after 3 s if player doesn't tap Next
+                this._autoAdvanceTimer = this.time.delayedCall(3000, () => this.advanceLevel())
               },
             })
           },
@@ -537,8 +539,9 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
-  // Called by React when Next/Replay is pressed
+  // Called by React when Next/Replay is pressed, or auto-triggered after 3 s
   advanceLevel() {
+    if (this._autoAdvanceTimer) { this._autoAdvanceTimer.remove(); this._autoAdvanceTimer = null }
     const isLast = this.currentLevel >= LEVELS.length - 1
     this.currentLevel = isLast ? 0 : this.currentLevel + 1
     this.loadLevel(this.currentLevel)
