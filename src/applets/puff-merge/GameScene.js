@@ -1,22 +1,21 @@
 import Phaser from 'phaser'
 import { LEVELS } from './levels.js'
 
-const COLORS = {
-  1: 0xFFB3BA,
-  2: 0xFFD9B3,
-  3: 0xFFFAB3,
-  4: 0xB3FFB8,
-  5: 0xB3E5FF,
-  6: 0xCEB3FF,
-  7: 0xFFB3F0,
-  8: 0xB3FFF6,
-  9: 0xFFCCB3,
-}
-const COLOR_FALLBACK = 0xE0E0E0
+const COLOR_LIST = [
+  0xFFB3BA,  // pink
+  0xFFD9B3,  // peach
+  0xFFFAB3,  // yellow
+  0xB3FFB8,  // mint
+  0xB3E5FF,  // sky
+  0xCEB3FF,  // lavender
+  0xFFB3F0,  // pink-purple
+  0xB3FFF6,  // teal
+  0xFFCCB3,  // salmon
+]
 const GATE_W = 55  // width of gate wall on right edge
 
-function radiusFor(v) { return 14 + v * 6 }
-function colorFor(v) { return COLORS[v] ?? COLOR_FALLBACK }
+function radiusFor(v) { return Math.min(14 + v * 6, 110) }
+function colorFor(v) { return COLOR_LIST[(v - 1) % COLOR_LIST.length] }
 
 // Stable per-value pseudo-random (0–1)
 function seeded(n) {
