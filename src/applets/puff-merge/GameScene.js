@@ -113,16 +113,29 @@ export class GameScene extends Phaser.Scene {
   // ── Blob shape ────────────────────────────────────────────────────────────
 
   _buildBlobPoints(r, value) {
-    const N = 14
-    const flat = []
+    // Generate control points with seeded perturbation
+    const N = 10
+    let pts = []
     for (let i = 0; i < N; i++) {
       const angle = (i / N) * Math.PI * 2
-      const jitter = seeded(value * 31 + i) * 0.22 - 0.11
-      const br = r * (1 + jitter)
-      flat.push(Math.cos(angle) * br, Math.sin(angle) * br)
+      const jitter = seeded(value * 31 + i) * 0.24 - 0.12
+      pts.push({ x: Math.cos(angle) * r * (1 + jitter), y: Math.sin(angle) * r * (1 + jitter) })
     }
-    flat.push(flat[0], flat[1])  // close spline
-    return new Phaser.Curves.Spline(flat).getPoints(80)
+    // Chaikin corner-cutting: 3 passes → 10→20→40→80 smooth points
+    for (let pass = 0; pass < 3; pass++) {
+      const next = []
+      const len = pts.length
+      for (let i = 0; i < len; i++) {
+        const p0 = pts[i]
+        const p1 = pts[(i + 1) % len]
+        next.push(
+          { x: 0.75 * p0.x + 0.25 * p1.x, y: 0.75 * p0.y + 0.25 * p1.y },
+          { x: 0.25 * p0.x + 0.75 * p1.x, y: 0.25 * p0.y + 0.75 * p1.y },
+        )
+      }
+      pts = next
+    }
+    return pts.map(p => new Phaser.Math.Vector2(p.x, p.y))
   }
 
   // ── Puff creation ─────────────────────────────────────────────────────────
@@ -247,7 +260,9 @@ export class GameScene extends Phaser.Scene {
     // Smile (skip for tiny puffs)
     if (r >= 26) {
       gfx.lineStyle(Math.max(1.5, r * 0.07), 0x332211, 0.50)
-      gfx.strokeArc(0, r * 0.08, r * 0.20, 0.18 * Math.PI, 0.82 * Math.PI)
+      gfx.beginPath()
+      gfx.arc(0, r * 0.08, r * 0.20, 0.18 * Math.PI, 0.82 * Math.PI, false)
+      gfx.strokePath()
     }
   }
 
@@ -276,16 +291,15 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
-      // Smoothly rotate toward target
+      // Smoothly lerp look direction (component-based, no angle math quirks)
       const targetAngle = Math.atan2(targetY - puff.y, targetX - puff.x)
-      puff._lookAngle = Phaser.Math.Angle.RotateTo(puff._lookAngle, targetAngle, 0.07)
+      const tdx = Math.cos(targetAngle)
+      const tdy = Math.sin(targetAngle)
+      if (puff._lookDx === undefined) { puff._lookDx = tdx; puff._lookDy = tdy }
+      puff._lookDx = puff._lookDx * 0.93 + tdx * 0.07
+      puff._lookDy = puff._lookDy * 0.93 + tdy * 0.07
 
-      this._drawFace(
-        puff.faceGfx,
-        puff._r,
-        Math.cos(puff._lookAngle),
-        Math.sin(puff._lookAngle)
-      )
+      this._drawFace(puff.faceGfx, puff._r, puff._lookDx, puff._lookDy)
     }
   }
 
@@ -628,7 +642,9 @@ export class GameScene extends Phaser.Scene {
     // Arch outline at top of opening (decorative semicircle)
     const archR = GATE_W / 2
     this._gateGfx.lineStyle(3, wallDark, 0.7)
-    this._gateGfx.strokeArc(wallX + GATE_W / 2, gateTop, archR, Math.PI, 0, true)
+    this._gateGfx.beginPath()
+    this._gateGfx.arc(wallX + GATE_W / 2, gateTop, archR, Math.PI, 0, true)
+    this._gateGfx.strokePath()
 
     // Cap edges of opening
     this._gateGfx.fillStyle(wallColor, 1)
