@@ -5,11 +5,12 @@ import LEVELS, { SHAPES, rotateCW, PIECE_COLORS } from './levels.js'
 const CELL = 40
 const PAD = 20
 const TRAY_GAP = 20
-const TRAY_SCALE = 0.55
+const TRAY_SCALE = 0.65
+const TRAY_HIT_PAD = 8 // invisible padding around tray pieces for easier tapping
 const TAP_THRESHOLD = 5
 const DRAG_LIFT_MOUSE = 30
 const DRAG_LIFT_TOUCH = 120 // bigger offset so finger doesn't occlude piece
-const TRAY_ROW_H = 55 // height of one tray row
+const TRAY_ROW_H = 65 // height of one tray row
 
 /* stable SVG width across all levels so layout never shifts */
 const MAX_GRID_W = Math.max(...LEVELS.map(l => l.gridWidth))
@@ -666,11 +667,19 @@ export default function TilePuzzles() {
         )
       }
 
+      const pw = (Math.max(...baseCells.map(([,c]) => c)) + 1) * S
+      const ph = (Math.max(...baseCells.map(([r]) => r)) + 1) * S
       return (
         <g key={piece.id}
           onPointerDown={(e) => onTrayPieceDown(e, piece.id)}
           style={{ cursor: 'grab' }}
         >
+          {/* invisible padded hit area for easier tapping */}
+          <rect
+            x={x - TRAY_HIT_PAD} y={y - TRAY_HIT_PAD}
+            width={pw + TRAY_HIT_PAD * 2} height={ph + TRAY_HIT_PAD * 2}
+            fill="transparent"
+          />
           {baseCells.map(([r, c], i) => (
             <g key={i}>
               {bevelCell(x + c * S, y + r * S, piece.color, S)}
