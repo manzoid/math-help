@@ -75,7 +75,6 @@ export class GameScene extends Phaser.Scene {
       )
     }
 
-    this._checkMerges()
     this._updateFaces()
     this._checkGateSquish()
   }
@@ -104,9 +103,6 @@ export class GameScene extends Phaser.Scene {
         : this._centerSpawnPos(i, puffs.length, playW, H)
       this._spawnPuff(value, pos.x, pos.y)
     })
-
-    // Give newly-spawned puffs time to drift apart before merges are checked
-    this.puffs.forEach(p => { p._mergeCooldown = 1400 })
 
     this.time.delayedCall(100, () => this._checkWin())
   }
@@ -405,6 +401,7 @@ export class GameScene extends Phaser.Scene {
       container.body.setVelocity(vx, vy)
       this.tweens.add({ targets: container, scaleX: 1.0, scaleY: 1.0, duration: 220, ease: 'Back.easeOut' })
       container._wobbleTween = this._startWobble(container)
+      this._tryMergeOnDrop(container)
     })
   }
 
@@ -449,7 +446,7 @@ export class GameScene extends Phaser.Scene {
     const { a, b } = puff._parents
     const rA = radiusFor(a.value)
     const rB = radiusFor(b.value)
-    const sep = (rA + rB) * 0.7
+    const sep = (rA + rB) * 1.1
     const angle = Math.random() * Math.PI * 2
     const cx = puff.x
     const cy = puff.y
@@ -485,20 +482,16 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
-  // ── Merge detection ───────────────────────────────────────────────────────
+  // ── Merge on drag-drop ────────────────────────────────────────────────────
 
-  _checkMerges() {
-    const ps = this.puffs
-    for (let i = 0; i < ps.length; i++) {
-      for (let j = i + 1; j < ps.length; j++) {
-        const a = ps[i], b = ps[j]
-        if (a._merging || b._merging || a._dragging || b._dragging) continue
-        if (a._mergeCooldown > 0 || b._mergeCooldown > 0) continue
-        const dist = Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y)
-        if (dist < (a._r + b._r) * 0.78) {
-          this._mergePuffs(a, b)
-          return
-        }
+  _tryMergeOnDrop(puff) {
+    if (puff._merging || puff._mergeCooldown > 0) return
+    for (const other of this.puffs) {
+      if (other === puff || other._merging || other._mergeCooldown > 0) continue
+      const dist = Phaser.Math.Distance.Between(puff.x, puff.y, other.x, other.y)
+      if (dist < (puff._r + other._r) * 0.9) {
+        this._mergePuffs(puff, other)
+        return
       }
     }
   }
