@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Phaser from 'phaser'
 import { GameScene } from './GameScene.js'
-import { STAGES, STAGES_PER_ADVANCE } from './stages.js'
+import { STAGES } from './stages.js'
 import { generateProblem } from './generator.js'
 
 const FLOWER_COLORS = ['#FF6B6B', '#FFD93D', '#6BCB77', '#4D96FF', '#C77DFF']
@@ -84,7 +84,7 @@ export default function PuffMerge() {
   const onCorrect = () => {
     const newCorrect = correctRef.current + 1
 
-    if (newCorrect >= STAGES_PER_ADVANCE) {
+    if (newCorrect >= STAGES[stageIdxRef.current].count) {
       // Advance to next stage (stay at last if already there)
       const currStage = stageIdxRef.current
       const nextStage = currStage + 1 < STAGES.length ? currStage + 1 : currStage

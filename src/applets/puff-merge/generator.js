@@ -9,20 +9,50 @@ const MIXED_OP_RANGES = {
   doubles: [1, 7],
 }
 
+/**
+ * Shuffle-bag sampling: maps seqIndex → n using a seeded Fisher-Yates shuffle
+ * per cycle. Within each cycle of rangeLen problems every n appears exactly
+ * once; adjacent cycles use different seeds so the boundary rarely repeats.
+ */
+function shuffleBagN(lo, hi, seqIndex, stageId) {
+  const rangeLen = hi - lo + 1
+  const cycleIdx = Math.floor(seqIndex / rangeLen)
+  const pos      = seqIndex % rangeLen
+
+  const arr = Array.from({ length: rangeLen }, (_, i) => i)
+  let seed = (cycleIdx * 997 + stageId.charCodeAt(0) * 31) | 0
+  for (let i = arr.length - 1; i > 0; i--) {
+    seed = (Math.imul(seed, 1664525) + 1013904223) | 0
+    const j = (seed >>> 0) % (i + 1)
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  return lo + arr[pos]
+}
+
 function pickComponents(stage, seqIndex) {
   let { operation, nRange, type } = stage
+  const isMixed = operation === 'mixed'
 
-  if (operation === 'mixed') {
+  if (isMixed) {
     const ops = ['plus1', 'plus2', 'doubles']
     operation = ops[Math.floor(Math.random() * ops.length)]
     nRange = MIXED_OP_RANGES[operation]
   }
 
   const [lo, hi] = nRange
-  const rangeLen = hi - lo + 1
-  const n = (type === 'ordered')
-    ? lo + (seqIndex % rangeLen)
-    : lo + Math.floor(Math.random() * rangeLen)
+  const rangeLen  = hi - lo + 1
+
+  let n
+  if (type === 'ordered') {
+    // Strict ascending, no wrap — stage.count === rangeLen so seqIndex stays in [0, rangeLen)
+    n = lo + seqIndex
+  } else if (isMixed) {
+    // Operation already randomized; pick n uniformly too
+    n = lo + Math.floor(Math.random() * rangeLen)
+  } else {
+    // Shuffle-bag: every n once per cycle before any repeats
+    n = shuffleBagN(lo, hi, seqIndex, stage.id)
+  }
 
   let a, b, target
   if (operation === 'plus1') {
