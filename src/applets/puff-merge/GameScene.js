@@ -14,7 +14,7 @@ const COLOR_LIST = [
 ]
 const GATE_W = 55  // width of gate wall on right edge
 
-function radiusFor(v) { return Math.min(14 + v * 6, 110) }
+function radiusFor(v) { return Math.min(Math.max(28, 14 + v * 6), 110) }
 function colorFor(v) { return COLOR_LIST[(v - 1) % COLOR_LIST.length] }
 
 // Stable per-value pseudo-random (0–1)
@@ -177,7 +177,7 @@ export class GameScene extends Phaser.Scene {
 
     // ── Number label ──
     const label = this.add.text(0, r * 0.24, String(value), {
-      fontSize: `${Math.max(13, Math.round(r * 0.75))}px`,
+      fontSize: `${Math.max(16, Math.round(r * 0.82))}px`,
       fontStyle: 'bold',
       color: '#3D2014',
       fontFamily: 'system-ui, sans-serif',
