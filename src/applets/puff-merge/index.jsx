@@ -1,27 +1,125 @@
 import { useEffect, useRef, useState } from 'react'
 import Phaser from 'phaser'
 import { GameScene } from './GameScene.js'
+import { STAGES, STAGES_PER_ADVANCE } from './stages.js'
+import { generateProblem } from './generator.js'
 
-const btnStyle = {
-  background: '#55CC77',
-  color: '#fff',
-  border: 'none',
-  borderRadius: 999,
-  padding: '10px 28px',
-  fontSize: 18,
-  fontWeight: 700,
-  fontFamily: 'system-ui, sans-serif',
-  cursor: 'pointer',
-  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+const FLOWER_COLORS = ['#FF6B6B', '#FFD93D', '#6BCB77', '#4D96FF', '#C77DFF']
+
+function Flower({ index, colorIdx, blowAway }) {
+  const [popped, setPopped] = useState(false)
+  const x = 8 + index * 16
+  const petalColor = FLOWER_COLORS[colorIdx % FLOWER_COLORS.length]
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setPopped(true))
+    return () => cancelAnimationFrame(id)
+  }, [])
+
+  const blowStyle = {
+    transition: blowAway ? 'transform 800ms ease-in, opacity 800ms ease-in' : 'none',
+    transform: blowAway ? 'translateX(-420px)' : 'translateX(0px)',
+    opacity: blowAway ? 0 : 1,
+  }
+
+  const popStyle = {
+    transformOrigin: `${x}px 22px`,
+    transform: popped ? 'scale(1)' : 'scale(0)',
+    transition: popped ? 'transform 0.4s cubic-bezier(0.34,1.56,0.64,1)' : 'none',
+  }
+
+  return (
+    <g style={blowStyle}>
+      <g style={popStyle}>
+        {/* Stem */}
+        <rect x={x - 1} y={24} width={2} height={10} fill="#55AA33" />
+        {/* 4 petals */}
+        {[0, 1, 2, 3].map(i => {
+          const a = (i / 4) * Math.PI * 2
+          return (
+            <circle
+              key={i}
+              cx={x + Math.cos(a) * 6}
+              cy={22 + Math.sin(a) * 6}
+              r={5}
+              fill={petalColor}
+              opacity={0.92}
+            />
+          )
+        })}
+        {/* Center */}
+        <circle cx={x} cy={22} r={4} fill="#FFD700" />
+      </g>
+    </g>
+  )
 }
 
 export default function PuffMerge() {
-  const containerRef = useRef(null)
-  const gameRef = useRef(null)
-  const [ui, setUi] = useState({ level: 1, total: 10, goal: '?', showNext: false, isLast: false })
+  const containerRef  = useRef(null)
+  const gameRef       = useRef(null)
+  const blowTimerRef  = useRef(null)
+  const onCorrectRef  = useRef(null)
+  const onResetRef    = useRef(null)
+  const stageIdxRef   = useRef(0)
+  const correctRef    = useRef(0)
+
+  const [stageIdx, setStageIdx] = useState(0)
+  const [correct,  setCorrect]  = useState(0)
+  const [problem,  setProblem]  = useState(null)
+  const [flowers,  setFlowers]  = useState([])
+  const [blowAway, setBlowAway] = useState(false)
+
+  // Keep refs in sync with state so Phaser callbacks always see latest values
+  stageIdxRef.current = stageIdx
+  correctRef.current  = correct
+
+  const getScene = () => gameRef.current?.scene.getScene('GameScene')
+
+  const sendProblem = (p) => {
+    setProblem(p)
+    gameRef.current?.registry.set('currentProblem', p)
+    getScene()?.loadProblem(p)
+  }
+
+  const onCorrect = () => {
+    const newCorrect = correctRef.current + 1
+
+    if (newCorrect >= STAGES_PER_ADVANCE) {
+      // Advance to next stage (stay at last if already there)
+      const currStage = stageIdxRef.current
+      const nextStage = currStage + 1 < STAGES.length ? currStage + 1 : currStage
+
+      setBlowAway(true)
+      blowTimerRef.current = setTimeout(() => {
+        setFlowers([])
+        setBlowAway(false)
+      }, 900)
+
+      setStageIdx(nextStage)
+      stageIdxRef.current = nextStage
+      setCorrect(0)
+      correctRef.current = 0
+      sendProblem(generateProblem(STAGES[nextStage], 0))
+    } else {
+      setCorrect(newCorrect)
+      correctRef.current = newCorrect
+      setFlowers(f => [...f, { id: Date.now(), colorIdx: newCorrect - 1 }])
+      sendProblem(generateProblem(STAGES[stageIdxRef.current], newCorrect))
+    }
+  }
+
+  const onReset = () => {
+    sendProblem(generateProblem(STAGES[stageIdxRef.current], correctRef.current))
+  }
+
+  // Always point refs at the freshest closures
+  onCorrectRef.current = onCorrect
+  onResetRef.current   = onReset
 
   useEffect(() => {
-    // Pass React state setter into Phaser via registry
+    const firstProblem = generateProblem(STAGES[0], 0)
+    setProblem(firstProblem)
+
     const game = new Phaser.Game({
       type: Phaser.AUTO,
       width: 480,
@@ -38,54 +136,60 @@ export default function PuffMerge() {
         autoCenter: Phaser.Scale.CENTER_BOTH,
       },
     })
-    game.registry.set('onUiUpdate', setUi)
+
+    // Stable wrappers → always call the latest closure via ref
+    game.registry.set('currentProblem', firstProblem)
+    game.registry.set('onCorrect', () => onCorrectRef.current?.())
+    game.registry.set('onReset',   () => onResetRef.current?.())
+
     gameRef.current = game
 
-    return () => game.destroy(true)
+    return () => {
+      if (blowTimerRef.current) clearTimeout(blowTimerRef.current)
+      game.destroy(true)
+    }
   }, [])
 
-  const handleNext = () => {
-    const scene = gameRef.current?.scene.getScene('GameScene')
-    scene?.advanceLevel()
-  }
-
   return (
-    <div style={{ position: 'relative', width: '100%', maxWidth: 480, margin: '0 auto' }}>
-      {/* DOM text overlay — always crisp, never scaled with canvas */}
+    <div style={{ width: '100%', maxWidth: 480, margin: '0 auto', fontFamily: 'system-ui, sans-serif' }}>
+
+      {/* Goal display */}
       <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0,
-        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-        padding: '12px 16px',
-        pointerEvents: 'none',
-        zIndex: 10,
+        textAlign: 'center',
+        fontSize: 28,
+        fontWeight: 700,
+        color: '#7A6655',
+        padding: '8px 0 4px',
       }}>
-        <span style={{ fontSize: 13, color: '#BBAA99', fontFamily: 'system-ui, sans-serif' }}>
-          Level {ui.level} / {ui.total}
+        Become{' '}
+        <span style={{ fontSize: 40, color: '#55AA33' }}>
+          {problem?.target ?? '?'}
         </span>
-        <span style={{
-          fontSize: 22, fontWeight: 700, color: '#7A6655',
-          fontFamily: 'system-ui, sans-serif',
-        }}>
-          Make {ui.goal}
-        </span>
-        <span style={{ width: 70 }} /> {/* balance the flex row */}
       </div>
 
-      {/* Canvas container */}
+      {/* Phaser canvas */}
       <div ref={containerRef} style={{ width: '100%' }} />
 
-      {/* Next / replay button — shown after win */}
-      {ui.showNext && (
-        <div style={{
-          position: 'absolute', bottom: 18, left: 0, right: 55,
-          display: 'flex', justifyContent: 'center',
-          zIndex: 10,
-        }}>
-          <button style={btnStyle} onClick={handleNext}>
-            {ui.isLast ? 'All done! 🎉' : 'Next →'}
-          </button>
-        </div>
-      )}
+      {/* Progress meadow */}
+      <svg
+        width="100%"
+        viewBox="0 0 400 60"
+        style={{ display: 'block', overflow: 'visible' }}
+      >
+        {/* Ground layers */}
+        <rect x={0} y={30} width={400} height={30} fill="#A8D880" />
+        <rect x={0} y={44} width={400} height={16} fill="#88BB66" />
+
+        {/* One flower per solved problem */}
+        {flowers.map((f, i) => (
+          <Flower
+            key={f.id}
+            index={i}
+            colorIdx={f.colorIdx}
+            blowAway={blowAway}
+          />
+        ))}
+      </svg>
     </div>
   )
 }

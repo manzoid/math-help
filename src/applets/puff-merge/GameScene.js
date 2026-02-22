@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { LEVELS } from './levels.js'
+import { canReachTarget } from './generator.js'
 
 const COLOR_LIST = [
   0xFFB3BA,  // pink
@@ -27,54 +27,81 @@ export class GameScene extends Phaser.Scene {
   constructor() {
     super({ key: 'GameScene' })
     this.puffs = []
-    this.currentLevel = 0
     this.won = false
+    this._currentTarget = null
     this._gateX = 0
     this._gateY = 0
-    this._onUiUpdate = null
+    this._onCorrect = null
+    this._onReset = null
+    this._hintTimer = null
+    this._hintOverlay = null
+    this._hintTargetPuff = null
+    this._hintTween = null
+    this._autoResetTimer = null
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   create() {
     this.won = false
-    this._onUiUpdate = this.game.registry.get('onUiUpdate') ?? (() => {})
+    this._onCorrect = this.game.registry.get('onCorrect') ?? (() => {})
+    this._onReset   = this.game.registry.get('onReset')   ?? (() => {})
 
     const W = this.scale.width
     const H = this.scale.height
     this.physics.world.setBounds(0, 0, W - GATE_W, H)
 
     this._drawBackground()
-    this.loadLevel(this.currentLevel)
+
+    const problem = this.game.registry.get('currentProblem')
+    if (problem) {
+      this.loadProblem(problem)
+    }
   }
 
-  update() {
+  update(time, delta) {
     if (this.won) return
+
+    // Decrement merge cooldowns
+    for (const p of this.puffs) {
+      if (p._mergeCooldown > 0) p._mergeCooldown = Math.max(0, p._mergeCooldown - delta)
+    }
+
+    // Hint overlay tracks its target puff
+    if (this._hintOverlay && this._hintTargetPuff?.active) {
+      this._hintOverlay.setPosition(
+        this._hintTargetPuff.x,
+        this._hintTargetPuff.y - this._hintTargetPuff._r - 14,
+      )
+    }
+
     this._checkMerges()
     this._updateFaces()
     this._checkGateSquish()
   }
 
-  // ── Level Loading ─────────────────────────────────────────────────────────
+  // ── Problem loading ────────────────────────────────────────────────────────
 
-  loadLevel(index) {
+  loadProblem({ target, puffs }) {
     this.won = false
+    this._clearHint()
+
     for (const p of this.puffs) p.destroy()
     this.puffs = []
 
-    const level = LEVELS[index]
+    this._currentTarget = target
+
     const W = this.scale.width
     const H = this.scale.height
     const playW = W - GATE_W
 
-    this._onUiUpdate({ level: index + 1, total: LEVELS.length, goal: level.target, showNext: false })
-    this._drawGate(level.target)
+    this._drawGate(target)
 
-    const spreadOut = index >= 4
-    level.puffs.forEach((value, i) => {
+    const spreadOut = puffs.length >= 5
+    puffs.forEach((value, i) => {
       const pos = spreadOut
-        ? this._edgeSpawnPos(i, level.puffs.length, playW, H)
-        : this._centerSpawnPos(i, level.puffs.length, playW, H)
+        ? this._edgeSpawnPos(i, puffs.length, playW, H)
+        : this._centerSpawnPos(i, puffs.length, playW, H)
       this._spawnPuff(value, pos.x, pos.y)
     })
 
@@ -112,7 +139,6 @@ export class GameScene extends Phaser.Scene {
   // ── Blob shape ────────────────────────────────────────────────────────────
 
   _buildBlobPoints(r, value) {
-    // Generate control points with seeded perturbation
     const N = 10
     let pts = []
     for (let i = 0; i < N; i++) {
@@ -139,7 +165,7 @@ export class GameScene extends Phaser.Scene {
 
   // ── Puff creation ─────────────────────────────────────────────────────────
 
-  _spawnPuff(value, x, y, fromScale = 1.0) {
+  _spawnPuff(value, x, y, fromScale = 1.0, parentData = null) {
     const r = radiusFor(value)
     const color = colorFor(value)
     const blobPts = this._buildBlobPoints(r, value)
@@ -151,6 +177,8 @@ export class GameScene extends Phaser.Scene {
     container._dragging = false
     container._squishing = false
     container._lookAngle = 0
+    container._parents = parentData
+    container._mergeCooldown = 0
 
     // ── Body graphics (drawn once) ──
     const bodyGfx = this.add.graphics()
@@ -204,15 +232,14 @@ export class GameScene extends Phaser.Scene {
       (Math.random() - 0.5) * 80
     )
 
-    // ── Drag ──
+    // ── Interaction ──
     container.setSize(r * 2, r * 2)
     container.setInteractive()
     this.input.setDraggable(container)
     this._setupDrag(container)
+    this._setupShake(container)
 
     // ── Wobble / Pop-in ──
-    // Start wobble only once scale is at 1.0 — if we start it before setScale(fromScale),
-    // Phaser captures the wrong FROM value and yoyos back down to near-zero.
     if (fromScale !== 1.0) {
       container.setScale(fromScale)
       this.tweens.add({
@@ -277,7 +304,6 @@ export class GameScene extends Phaser.Scene {
     for (const puff of this.puffs) {
       if (!puff.faceGfx || puff._merging) continue
 
-      // Determine look-at target (pointer, or nearest other puff)
       let targetX = pointer.worldX
       let targetY = pointer.worldY
 
@@ -294,7 +320,6 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
-      // Smoothly lerp look direction (component-based, no angle math quirks)
       const targetAngle = Math.atan2(targetY - puff.y, targetX - puff.x)
       const tdx = Math.cos(targetAngle)
       const tdy = Math.sin(targetAngle)
@@ -309,11 +334,10 @@ export class GameScene extends Phaser.Scene {
   // ── Gate squish (comedic wall bounce) ─────────────────────────────────────
 
   _checkGateSquish() {
-    const level = LEVELS[this.currentLevel]
     for (const p of this.puffs) {
       if (p._squishing || p._merging || p._dragging) continue
       if (!p.body?.blocked?.right) continue
-      if (p._value === level.target) continue  // target puff handled by win
+      if (p._value === this._currentTarget) continue  // target puff handled by win
 
       this._squishAgainstGate(p)
     }
@@ -360,7 +384,6 @@ export class GameScene extends Phaser.Scene {
       container._dragging = true
       container.body.setVelocity(0, 0)
       if (container._wobbleTween) { container._wobbleTween.stop() }
-      // Squish on pickup
       this.tweens.add({ targets: container, scaleX: 1.10, scaleY: 0.90, duration: 100, ease: 'Quad.easeOut' })
       lastX = dragX; lastY = dragY
     })
@@ -377,9 +400,84 @@ export class GameScene extends Phaser.Scene {
       const vx = Phaser.Math.Clamp(container._dragVx || 0, -260, 260)
       const vy = Phaser.Math.Clamp(container._dragVy || 0, -260, 260)
       container.body.setVelocity(vx, vy)
-      // Spring back to round
       this.tweens.add({ targets: container, scaleX: 1.0, scaleY: 1.0, duration: 220, ease: 'Back.easeOut' })
       container._wobbleTween = this._startWobble(container)
+    })
+  }
+
+  // ── Shake / double-tap to undo ────────────────────────────────────────────
+
+  _setupShake(container) {
+    let lastTapTime = 0
+    container.on('pointerdown', () => {
+      const now = this.time.now
+      if (now - lastTapTime < 350 && now - lastTapTime > 30) {
+        this._triggerShake(container)
+      }
+      lastTapTime = now
+    })
+  }
+
+  _triggerShake(puff) {
+    if (puff._parents === null) {
+      // Original puff — exaggerated wobble only, no split
+      if (puff._wobbleTween) puff._wobbleTween.stop()
+      this.tweens.add({
+        targets: puff,
+        scaleX: 1.25, scaleY: 0.78,
+        duration: 80,
+        yoyo: true, repeat: 2,
+        ease: 'Quad.easeInOut',
+        onComplete: () => {
+          puff._wobbleTween = this._startWobble(puff)
+        },
+      })
+    } else {
+      this._splitPuff(puff)
+    }
+  }
+
+  _splitPuff(puff) {
+    if (puff._merging) return
+    puff._merging = true
+    if (puff._wobbleTween) puff._wobbleTween.stop()
+
+    const { a, b } = puff._parents
+    const rA = radiusFor(a.value)
+    const rB = radiusFor(b.value)
+    const sep = (rA + rB) * 0.7
+    const angle = Math.random() * Math.PI * 2
+    const cx = puff.x
+    const cy = puff.y
+
+    this.tweens.add({
+      targets: puff,
+      scaleX: 0, scaleY: 0, alpha: 0,
+      duration: 150,
+      ease: 'Quad.easeIn',
+      onComplete: () => {
+        this.puffs = this.puffs.filter(p => p !== puff)
+        puff.destroy()
+
+        const childA = this._spawnPuff(
+          a.value,
+          cx + Math.cos(angle) * sep / 2,
+          cy + Math.sin(angle) * sep / 2,
+          0.1,
+          a.parents,
+        )
+        const childB = this._spawnPuff(
+          b.value,
+          cx - Math.cos(angle) * sep / 2,
+          cy - Math.sin(angle) * sep / 2,
+          0.1,
+          b.parents,
+        )
+        childA._mergeCooldown = 400
+        childB._mergeCooldown = 400
+
+        this.time.delayedCall(450, () => this._checkSolvable())
+      },
     })
   }
 
@@ -391,6 +489,7 @@ export class GameScene extends Phaser.Scene {
       for (let j = i + 1; j < ps.length; j++) {
         const a = ps[i], b = ps[j]
         if (a._merging || b._merging || a._dragging || b._dragging) continue
+        if (a._mergeCooldown > 0 || b._mergeCooldown > 0) continue
         const dist = Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y)
         if (dist < (a._r + b._r) * 0.78) {
           this._mergePuffs(a, b)
@@ -401,7 +500,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   _mergePuffs(a, b) {
-    const level = LEVELS[this.currentLevel]
     a._merging = true
     b._merging = true
     if (a._wobbleTween) a._wobbleTween.stop()
@@ -412,6 +510,12 @@ export class GameScene extends Phaser.Scene {
     const smaller = a._r >= b._r ? b : a
     const mergeX = larger.x
     const mergeY = larger.y
+
+    // Record merge history so the result can be split back
+    const parentData = {
+      a: { value: a._value, parents: a._parents },
+      b: { value: b._value, parents: b._parents },
+    }
 
     this.tweens.add({
       targets: smaller,
@@ -424,35 +528,70 @@ export class GameScene extends Phaser.Scene {
         smaller.destroy()
         larger.destroy()
 
-        if (newVal > level.target) {
-          this._showOvershoot(mergeX, mergeY, newVal, () => {
-            this.time.delayedCall(900, () => this.loadLevel(this.currentLevel))
-          })
-        } else {
-          this._spawnPuff(newVal, mergeX, mergeY, 0.1)
-          this._emitParticles(mergeX, mergeY, colorFor(newVal))
-          this.time.delayedCall(400, () => this._checkWin())
-        }
+        // Oversized puffs are not punished — they bounce off the gate naturally
+        this._spawnPuff(newVal, mergeX, mergeY, 0.1, parentData)
+        this._emitParticles(mergeX, mergeY, colorFor(newVal))
+
+        this.time.delayedCall(400, () => {
+          this._checkWin()
+          if (!this.won) this._checkSolvable()
+        })
       },
     })
   }
 
-  // ── Overshoot ─────────────────────────────────────────────────────────────
+  // ── Solvability & hint ────────────────────────────────────────────────────
 
-  _showOvershoot(x, y, val, onDone) {
-    const r = radiusFor(val)
-    const gfx = this.add.graphics().setDepth(4)
-    gfx.fillStyle(0xFF5555, 0.85)
-    gfx.fillCircle(x, y, r)
-    const lbl = this.add.text(x, y, String(val), {
-      fontSize: `${Math.round(r * 0.82)}px`,
-      fontStyle: 'bold', color: '#FFFFFF', fontFamily: 'system-ui, sans-serif',
-    }).setOrigin(0.5, 0.5).setDepth(4)
+  _checkSolvable() {
+    const values = this.puffs.filter(p => !p._merging).map(p => p._value)
+    if (canReachTarget(values, this._currentTarget)) {
+      this._clearHint()
+    } else {
+      const oversized = this.puffs.find(p => !p._merging && p._value > this._currentTarget)
+      this._showHint(oversized ?? this.puffs.find(p => !p._merging))
+      this._scheduleAutoReset()
+    }
+  }
 
-    this.tweens.add({
-      targets: [gfx, lbl], alpha: 0, duration: 650, ease: 'Quad.easeOut',
-      onComplete: () => { gfx.destroy(); lbl.destroy(); onDone() },
+  _showHint(puff) {
+    this._clearHint()
+    if (!puff) return
+
+    this._hintTargetPuff = puff
+    this._hintOverlay = this.add.text(
+      puff.x,
+      puff.y - puff._r - 14,
+      '↔',
+      {
+        fontSize: '28px',
+        fontStyle: 'bold',
+        color: '#FF7722',
+        fontFamily: 'system-ui, sans-serif',
+        stroke: '#FFFFFF',
+        strokeThickness: 4,
+      },
+    ).setOrigin(0.5, 1).setDepth(10)
+
+    this._hintTween = this.tweens.add({
+      targets: this._hintOverlay,
+      alpha: 0.3,
+      duration: 600,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
     })
+  }
+
+  _clearHint() {
+    if (this._hintTween) { this._hintTween.stop(); this._hintTween = null }
+    if (this._hintOverlay) { this._hintOverlay.destroy(); this._hintOverlay = null }
+    this._hintTargetPuff = null
+    if (this._autoResetTimer) { this._autoResetTimer.remove(); this._autoResetTimer = null }
+  }
+
+  _scheduleAutoReset() {
+    if (this._autoResetTimer) this._autoResetTimer.remove()
+    this._autoResetTimer = this.time.delayedCall(8000, () => this._onReset())
   }
 
   // ── Particles ─────────────────────────────────────────────────────────────
@@ -481,18 +620,15 @@ export class GameScene extends Phaser.Scene {
   // ── Win check ─────────────────────────────────────────────────────────────
 
   _checkWin() {
-    const level = LEVELS[this.currentLevel]
-    const winner = this.puffs.find(p => p._value === level.target)
+    const winner = this.puffs.find(p => p._value === this._currentTarget)
     if (!winner) return
 
     this.won = true
+    this._clearHint()
     if (winner._wobbleTween) winner._wobbleTween.stop()
     winner.body.setVelocity(0, 0)
     winner.body.setCollideWorldBounds(false)
     winner._merging = true
-
-    const isLast = this.currentLevel >= LEVELS.length - 1
-    const W = this.scale.width
 
     // 1. Celebration pulse
     this.tweens.add({
@@ -520,31 +656,15 @@ export class GameScene extends Phaser.Scene {
               onComplete: () => {
                 winner.destroy()
                 this.puffs = this.puffs.filter(p => p !== winner)
-                this._emitParticles(this._gateX, this._gateY, colorFor(level.target))
-                // Tell React to show win UI
-                this._onUiUpdate({
-                  level: this.currentLevel + 1,
-                  total: LEVELS.length,
-                  goal: level.target,
-                  showNext: true,
-                  isLast,
-                })
-                // Auto-advance after 3 s if player doesn't tap Next
-                this._autoAdvanceTimer = this.time.delayedCall(3000, () => this.advanceLevel())
+                this._emitParticles(this._gateX, this._gateY, colorFor(this._currentTarget))
+                // Win fires immediately — no 3s wait, no Next button
+                this._onCorrect()
               },
             })
           },
         })
       },
     })
-  }
-
-  // Called by React when Next/Replay is pressed, or auto-triggered after 3 s
-  advanceLevel() {
-    if (this._autoAdvanceTimer) { this._autoAdvanceTimer.remove(); this._autoAdvanceTimer = null }
-    const isLast = this.currentLevel >= LEVELS.length - 1
-    this.currentLevel = isLast ? 0 : this.currentLevel + 1
-    this.loadLevel(this.currentLevel)
   }
 
   // ── Background ────────────────────────────────────────────────────────────
@@ -578,7 +698,7 @@ export class GameScene extends Phaser.Scene {
     bg.fillStyle(0x88BB66, 1)
     bg.fillRect(0, H * 0.86, playW, H * 0.14)
 
-    // Decorative flowers
+    // Decorative background flowers
     const flowers = [
       { x: playW * 0.08, y: H * 0.82 },
       { x: playW * 0.23, y: H * 0.79 },
@@ -647,9 +767,11 @@ export class GameScene extends Phaser.Scene {
 
     // Arch outline at top of opening (decorative semicircle)
     const archR = GATE_W / 2
+    const archCX = wallX + GATE_W / 2
+    const archCY = gateTop
     this._gateGfx.lineStyle(3, wallDark, 0.7)
     this._gateGfx.beginPath()
-    this._gateGfx.arc(wallX + GATE_W / 2, gateTop, archR, Math.PI, 0, true)
+    this._gateGfx.arc(archCX, archCY, archR, Math.PI, 0, true)
     this._gateGfx.strokePath()
 
     // Cap edges of opening
@@ -660,6 +782,18 @@ export class GameScene extends Phaser.Scene {
     // Target circle silhouette inside opening
     this._gateGfx.lineStyle(2, colorFor(targetValue), 0.55)
     this._gateGfx.strokeCircle(wallX + GATE_W / 2, gateMidY, r)
+
+    // N dots along the inner arc — visual count of the target
+    const dotColor = colorFor(targetValue)
+    this._gateGfx.fillStyle(dotColor, 0.75)
+    for (let i = 0; i < targetValue; i++) {
+      const angle = Math.PI - (i / Math.max(targetValue - 1, 1)) * Math.PI
+      this._gateGfx.fillCircle(
+        archCX + Math.cos(angle) * archR,
+        archCY + Math.sin(angle) * archR,
+        3.5,
+      )
+    }
 
     this._gateX = wallX + GATE_W / 2
     this._gateY = gateMidY
