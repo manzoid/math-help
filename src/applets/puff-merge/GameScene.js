@@ -205,16 +205,15 @@ export class GameScene extends Phaser.Scene {
       (Math.random() - 0.5) * 80
     )
 
-    // ── Wobble ──
-    container._wobbleTween = this._startWobble(container)
-
     // ── Drag ──
     container.setSize(r * 2, r * 2)
     container.setInteractive()
     this.input.setDraggable(container)
     this._setupDrag(container)
 
-    // ── Pop-in ──
+    // ── Wobble / Pop-in ──
+    // Start wobble only once scale is at 1.0 — if we start it before setScale(fromScale),
+    // Phaser captures the wrong FROM value and yoyos back down to near-zero.
     if (fromScale !== 1.0) {
       container.setScale(fromScale)
       this.tweens.add({
@@ -223,7 +222,12 @@ export class GameScene extends Phaser.Scene {
         scaleY: 1.0,
         duration: 380,
         ease: 'Back.easeOut',
+        onComplete: () => {
+          container._wobbleTween = this._startWobble(container)
+        },
       })
+    } else {
+      container._wobbleTween = this._startWobble(container)
     }
 
     this.puffs.push(container)
