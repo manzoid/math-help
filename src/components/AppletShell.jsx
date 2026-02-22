@@ -25,22 +25,9 @@ const styles = {
     color: 'var(--color-muted)',
     marginBottom: '0.75rem',
   },
-  tags: {
-    display: 'flex',
-    gap: '0.5rem',
-    flexWrap: 'wrap',
-  },
-  tag: {
-    fontSize: '0.75rem',
-    background: 'var(--color-accent-light)',
-    color: 'var(--color-accent)',
-    padding: '0.2rem 0.6rem',
-    borderRadius: '999px',
-    fontWeight: 500,
-  },
 }
 
-export default function AppletShell({ title, subtitle, tags, children }) {
+export default function AppletShell({ title, subtitle, children }) {
   return (
     <div style={styles.wrapper}>
       <Link to="/" style={styles.backLink}>
@@ -49,13 +36,6 @@ export default function AppletShell({ title, subtitle, tags, children }) {
       <header style={styles.header}>
         <h1 style={styles.title}>{title}</h1>
         {subtitle && <p style={styles.subtitle}>{subtitle}</p>}
-        {tags?.length > 0 && (
-          <div style={styles.tags}>
-            {tags.map((t) => (
-              <span key={t} style={styles.tag}>{t}</span>
-            ))}
-          </div>
-        )}
       </header>
       {children}
     </div>
