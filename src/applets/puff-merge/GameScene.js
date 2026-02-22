@@ -105,6 +105,9 @@ export class GameScene extends Phaser.Scene {
       this._spawnPuff(value, pos.x, pos.y)
     })
 
+    // Give newly-spawned puffs time to drift apart before merges are checked
+    this.puffs.forEach(p => { p._mergeCooldown = 1400 })
+
     this.time.delayedCall(100, () => this._checkWin())
   }
 
@@ -405,16 +408,17 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
-  // ── Shake / double-tap to undo ────────────────────────────────────────────
+  // ── Tap to undo ───────────────────────────────────────────────────────────
 
   _setupShake(container) {
-    let lastTapTime = 0
-    container.on('pointerdown', () => {
-      const now = this.time.now
-      if (now - lastTapTime < 350 && now - lastTapTime > 30) {
+    let downX = 0, downY = 0
+    container.on('pointerdown', (ptr) => { downX = ptr.x; downY = ptr.y })
+    container.on('pointerup', (ptr) => {
+      const dx = ptr.x - downX
+      const dy = ptr.y - downY
+      if (Math.sqrt(dx * dx + dy * dy) < 12) {
         this._triggerShake(container)
       }
-      lastTapTime = now
     })
   }
 
