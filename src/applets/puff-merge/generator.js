@@ -41,6 +41,7 @@ function pickDistractor(a, b, target) {
   const candidates = []
   for (let d = 1; d <= 14; d++) {
     if (d === a || d === b) continue
+    if (d === target) continue
     if (d + a === target || d + b === target) continue
     candidates.push(d)
   }
