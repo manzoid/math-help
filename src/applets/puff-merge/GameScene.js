@@ -177,13 +177,13 @@ export class GameScene extends Phaser.Scene {
     container.add(bodyGfx)
 
     // ── Number label ──
-    const label = this.add.text(0, r * 0.28, String(value), {
-      fontSize: `${Math.max(10, Math.round(r * 0.68))}px`,
+    const label = this.add.text(0, r * 0.24, String(value), {
+      fontSize: `${Math.max(13, Math.round(r * 0.75))}px`,
       fontStyle: 'bold',
-      color: '#FFFFFF',
+      color: '#3D2014',
       fontFamily: 'system-ui, sans-serif',
-      stroke: '#00000055',
-      strokeThickness: 3,
+      stroke: '#FFFFFF',
+      strokeThickness: 6,
     }).setOrigin(0.5, 0.5)
     container.add(label)
 
