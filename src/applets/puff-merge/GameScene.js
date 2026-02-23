@@ -75,6 +75,7 @@ export class GameScene extends Phaser.Scene {
       )
     }
 
+    this._checkMomentumMerges(time)
     this._updateFaces()
     this._checkGateSquish()
   }
@@ -396,6 +397,7 @@ export class GameScene extends Phaser.Scene {
 
     container.on('dragend', () => {
       container._dragging = false
+      container._lastDragEnd = this.time.now
       const vx = Phaser.Math.Clamp(container._dragVx || 0, -260, 260)
       const vy = Phaser.Math.Clamp(container._dragVy || 0, -260, 260)
       container.body.setVelocity(vx, vy)
@@ -480,6 +482,30 @@ export class GameScene extends Phaser.Scene {
         this.time.delayedCall(450, () => this._checkSolvable())
       },
     })
+  }
+
+  // ── Merge detection ───────────────────────────────────────────────────────
+
+  // Proximity merge during the momentum window after a drag release.
+  // A puff sliding under physics can still merge for 500ms after release.
+  _checkMomentumMerges(time) {
+    const WINDOW = 500
+    const ps = this.puffs
+    for (let i = 0; i < ps.length; i++) {
+      const a = ps[i]
+      if (a._merging || a._dragging || a._mergeCooldown > 0) continue
+      if (!a._lastDragEnd || time - a._lastDragEnd > WINDOW) continue
+      for (let j = 0; j < ps.length; j++) {
+        if (i === j) continue
+        const b = ps[j]
+        if (b._merging || b._dragging || b._mergeCooldown > 0) continue
+        const dist = Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y)
+        if (dist < (a._r + b._r) * 0.9) {
+          this._mergePuffs(a, b)
+          return
+        }
+      }
+    }
   }
 
   // ── Merge on drag-drop ────────────────────────────────────────────────────
