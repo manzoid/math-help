@@ -13,6 +13,7 @@ const COLOR_LIST = [
   0xFFCCB3,  // salmon
 ]
 const GATE_W = 55  // width of gate wall on right edge
+const RAINBOW = [0xFF6B6B, 0xFFD93D, 0x6BCB77, 0x4D96FF, 0xC77DFF, 0xFF9F1C, 0xFF6FF7]
 
 function radiusFor(v) { return Math.min(Math.max(36, 14 + v * 6), 110) }
 function colorFor(v) { return COLOR_LIST[(v - 1) % COLOR_LIST.length] }
@@ -653,13 +654,16 @@ export class GameScene extends Phaser.Scene {
     winner.body.setCollideWorldBounds(false)
     winner._merging = true
 
-    // 1. Celebration pulse
+    // 1. Big celebration pulse
     this.tweens.add({
       targets: winner,
-      scaleX: 1.35, scaleY: 1.35,
-      duration: 160, yoyo: true, repeat: 1,
+      scaleX: 1.55, scaleY: 1.55,
+      duration: 150, yoyo: true, repeat: 1,
       ease: 'Sine.easeInOut',
       onComplete: () => {
+        // Star burst at the winner's location
+        this._emitStarBurst(winner.x, winner.y)
+
         // 2. Travel to gate entrance
         this.tweens.add({
           targets: winner,
@@ -679,8 +683,11 @@ export class GameScene extends Phaser.Scene {
               onComplete: () => {
                 winner.destroy()
                 this.puffs = this.puffs.filter(p => p !== winner)
+                // Bigger burst at gate + screen flash + confetti shower
+                this._emitStarBurst(this._gateX, this._gateY)
                 this._emitParticles(this._gateX, this._gateY, colorFor(this._currentTarget))
-                // Win fires immediately — no 3s wait, no Next button
+                this._screenFlash()
+                this._rainConfetti()
                 this._onCorrect()
               },
             })
@@ -688,6 +695,90 @@ export class GameScene extends Phaser.Scene {
         })
       },
     })
+  }
+
+  // ── Celebration effects ───────────────────────────────────────────────────
+
+  _drawStarShape(gfx, outerR, innerR, color) {
+    gfx.fillStyle(color, 1)
+    gfx.beginPath()
+    for (let i = 0; i < 10; i++) {
+      const angle = (i / 10) * Math.PI * 2 - Math.PI / 2
+      const r = i % 2 === 0 ? outerR : innerR
+      if (i === 0) gfx.moveTo(Math.cos(angle) * r, Math.sin(angle) * r)
+      else         gfx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r)
+    }
+    gfx.closePath()
+    gfx.fillPath()
+  }
+
+  _emitStarBurst(x, y) {
+    const count = 18
+    for (let i = 0; i < count; i++) {
+      const angle  = (i / count) * Math.PI * 2
+      const speed  = 100 + Math.random() * 220
+      const outerR = 5 + Math.random() * 9
+      const color  = RAINBOW[Math.floor(Math.random() * RAINBOW.length)]
+
+      const gfx = this.add.graphics().setDepth(8)
+      gfx.setPosition(x, y)
+      this._drawStarShape(gfx, outerR, outerR * 0.42, color)
+
+      this.tweens.add({
+        targets: gfx,
+        x: x + Math.cos(angle) * speed,
+        y: y + Math.sin(angle) * speed - Math.random() * 55,
+        angle: (Math.random() - 0.5) * 540,
+        alpha: 0,
+        scaleX: 0.15, scaleY: 0.15,
+        duration: 550 + Math.random() * 400,
+        ease: 'Quad.easeOut',
+        onComplete: () => gfx.destroy(),
+      })
+    }
+  }
+
+  _screenFlash() {
+    const W = this.scale.width
+    const H = this.scale.height
+    const flash = this.add.graphics().setDepth(20)
+    flash.fillStyle(0xFFFFAA, 0.72)
+    flash.fillRect(0, 0, W, H)
+    this.tweens.add({
+      targets: flash,
+      alpha: 0,
+      duration: 400,
+      ease: 'Quad.easeOut',
+      onComplete: () => flash.destroy(),
+    })
+  }
+
+  _rainConfetti() {
+    const W = this.scale.width
+    for (let i = 0; i < 30; i++) {
+      this.time.delayedCall(i * 38, () => {
+        const x     = 20 + Math.random() * (W - 40)
+        const size  = 5 + Math.random() * 7
+        const color = RAINBOW[Math.floor(Math.random() * RAINBOW.length)]
+        const gfx   = this.add.graphics().setDepth(7)
+        gfx.setPosition(x, -10)
+        gfx.fillStyle(color, 0.92)
+        if (Math.random() < 0.5) {
+          gfx.fillCircle(0, 0, size / 2)
+        } else {
+          gfx.fillRect(-size / 2, -size / 2, size, size)
+        }
+        this.tweens.add({
+          targets: gfx,
+          y: this.scale.height + 20,
+          x: x + (Math.random() - 0.5) * 130,
+          angle: (Math.random() - 0.5) * 500,
+          duration: 1000 + Math.random() * 700,
+          ease: 'Quad.easeIn',
+          onComplete: () => gfx.destroy(),
+        })
+      })
+    }
   }
 
   // ── Background ────────────────────────────────────────────────────────────
